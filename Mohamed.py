@@ -6,25 +6,43 @@ import matplotlib.pyplot as plt
 # إعدادات الصفحة
 st.set_page_config(page_title="حاسبة التكامل", page_icon="🧮", layout="centered")
 
-# === كود CSS لإجبار الأزرار تكون جنب بعض على الموبايل ===
+# === الكود السحري لإجبار الأزرار تكون في سطر واحد على الموبايل ===
 st.markdown("""
 <style>
-/* منع نزول العناصر لسطر جديد وجعلها قابلة للسحب الجانبي (Scroll) */
-div[data-testid="stHorizontalBlock"] {
+/* إجبار العواميد إنها تفضل في سطر واحد وتسمح بالسحب يمين وشمال */
+[data-testid="stHorizontalBlock"] {
+    flex-direction: row !important;
     flex-wrap: nowrap !important;
     overflow-x: auto !important;
-    padding-bottom: 5px;
+    overflow-y: hidden !important;
+    padding-bottom: 8px;
 }
-/* تصغير المسافات بين العواميد (الأزرار) لتوفير المساحة */
-div[data-testid="column"] {
-    min-width: fit-content !important;
-    padding: 0 3px !important;
+/* تصغير حجم العواميد عشان الزراير تلزق في بعضها */
+[data-testid="column"] {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    min-width: min-content !important;
+    padding: 0 2px !important;
+}
+/* تظبيط حجم الأزرار نفسها عشان ماتاخدش مساحة كبيرة */
+.stButton > button {
+    padding: 2px 10px !important;
+    height: auto !important;
+    min-height: 38px !important;
+}
+/* شكل شريط التمرير (Scrollbar) */
+[data-testid="stHorizontalBlock"]::-webkit-scrollbar {
+    height: 4px;
+}
+[data-testid="stHorizontalBlock"]::-webkit-scrollbar-thumb {
+    background-color: #555;
+    border-radius: 4px;
 }
 </style>
 """, unsafe_allow_html=True)
 # =======================================================
 
-st.title("حاسبة التكامل العددي التفاعلية")
+st.title("🧮 حاسبة التكامل العددي التفاعلية")
 st.write("أدخل الدالة وحدد المعطيات لرؤية النتيجة والرسم البياني للمساحة تحت المنحنى.")
 
 # --- إدارة حالة النص (لربط الأزرار بخانة الدالة) ---
@@ -41,27 +59,24 @@ def clear_func():
 func_input = st.text_input("الدالة f(x):", key="func_text")
 
 # --- أزرار المساعدة العلمية ---
-st.markdown("<small><b>أزرار مساعدة (اضغط لإضافتها للدالة):</b></small>", unsafe_allow_html=True)
+st.markdown("<small><b>أزرار مساعدة (اسحب الشريط يميناً ويساراً):</b></small>", unsafe_allow_html=True)
 
-# الصف الأول من الأزرار
-c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-c1.button("sin()", on_click=append_to_func, args=("sin(",))
-c2.button("cos()", on_click=append_to_func, args=("cos(",))
-c3.button("tan()", on_click=append_to_func, args=("tan(",))
-c4.button("asin()", on_click=append_to_func, args=("asin(",))
-c5.button("acos()", on_click=append_to_func, args=("acos(",))
-c6.button("atan()", on_click=append_to_func, args=("atan(",))
-c7.button("🧹 مسح", on_click=clear_func, type="secondary")
-
-# الصف الثاني من الأزرار
-c8, c9, c10, c11, c12, c13, c14 = st.columns(7)
-c8.button("ln()", on_click=append_to_func, args=("ln(",))
-c9.button("e", on_click=append_to_func, args=("e",))
-c10.button("sqrt()", on_click=append_to_func, args=("sqrt(",))
-c11.button("pi", on_click=append_to_func, args=("pi",))
-c12.button("x²", on_click=append_to_func, args=("**2",))
-c13.button("^", on_click=append_to_func, args=("**",))
-c14.button("exp()", on_click=append_to_func, args=("exp(",))
+# حطينا كل الأزرار في صف واحد (14 عمود) والكود اللي فوق هيخليهم سطر واحد قابل للسحب
+cols = st.columns(14)
+cols[0].button("sin()", on_click=append_to_func, args=("sin(",))
+cols[1].button("cos()", on_click=append_to_func, args=("cos(",))
+cols[2].button("tan()", on_click=append_to_func, args=("tan(",))
+cols[3].button("ln()", on_click=append_to_func, args=("ln(",))
+cols[4].button("e", on_click=append_to_func, args=("e",))
+cols[5].button("sqrt()", on_click=append_to_func, args=("sqrt(",))
+cols[6].button("pi", on_click=append_to_func, args=("pi",))
+cols[7].button("x²", on_click=append_to_func, args=("**2",))
+cols[8].button("^", on_click=append_to_func, args=("**",))
+cols[9].button("exp()", on_click=append_to_func, args=("exp(",))
+cols[10].button("asin()", on_click=append_to_func, args=("asin(",))
+cols[11].button("acos()", on_click=append_to_func, args=("acos(",))
+cols[12].button("atan()", on_click=append_to_func, args=("atan(",))
+cols[13].button("🧹 مسح", on_click=clear_func, type="secondary")
 
 st.markdown("---") 
 
