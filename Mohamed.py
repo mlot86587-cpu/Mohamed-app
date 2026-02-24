@@ -208,4 +208,11 @@ with col_display:
                 ax.set_ylabel("f(x)")
                 ax.set_xlabel("x")
                 ax.spines['top'].set_visible(False)
-                ax.spines['right'].
+                ax.spines['right'].set_visible(False)
+                
+                st.pyplot(fig)
+
+            except Exception as e:
+                st.error("❌ تأكد من كتابة الدالة بشكل صحيح. استخدم الأزرار لتجنب الأخطاء الإملائية.")
+    else:
+        st.info("👋 أهلاً بك! قم بإدخال الدالة وتحديد المعطيات، ثم اضغط على 'احسب وارسم'.")
