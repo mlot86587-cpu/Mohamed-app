@@ -79,7 +79,7 @@ cols[11].button("acos()", on_click=append_to_func, args=("acos(",))
 cols[12].button("atan()", on_click=append_to_func, args=("atan(",))
 cols[13].button("🧹 مسح", on_click=clear_func, type="secondary")
 
-st.markdown("---") 
+st.markdown("------") 
 
 # --- إدخال باقي المعطيات ---
 col1, col2 = st.columns(2)
