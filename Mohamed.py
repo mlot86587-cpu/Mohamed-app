@@ -209,4 +209,3 @@ with col_display:
                 ax.set_xlabel("x")
                 ax.spines['top'].set_visible(False)
                 ax.spines['right'].
- 
