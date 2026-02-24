@@ -11,7 +11,7 @@ st.markdown("""
 <style>
 /* إلغاء المسافات الكبيرة بين العواميد (الأزرار) */
 [data-testid="stHorizontalBlock"] {
-    gap: 0.2rem !important; /* ده السر اللي هيقربهم من بعض */
+    gap: 0.5rem !important; /* ده السر اللي هيقربهم من بعض */
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     overflow-x: auto !important;
@@ -28,7 +28,7 @@ st.markdown("""
 /* تصغير الأزرار نفسها وتظبيط الهوامش */
 .stButton > button {
     width: auto !important;
-    padding: 2px 12px !important;
+    padding: 4px 12px !important;
     min-height: 35px !important;
     margin: 0 !important;
 }
