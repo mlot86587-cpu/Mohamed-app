@@ -95,7 +95,7 @@ method = st.selectbox("طريقة الحل:", [
 ])
 
 input_type = st.radio("المدخلات المتاحة:", ["عدد القطاعات (n)", "حجم الخطوة (h)"])
-val = st.number_input("أدخل القيمة (n أو h):", value=0.0, min_value=0.0001)
+val = st.number_input("أدخل القيمة (n أو h):", value=1.0, min_value=0.0001)
 
 # --- زر الحساب ---
 if st.button("🚀 احسب وارسم", type="primary", use_container_width=True):
