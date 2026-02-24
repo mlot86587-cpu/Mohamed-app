@@ -6,31 +6,33 @@ import matplotlib.pyplot as plt
 # إعدادات الصفحة
 st.set_page_config(page_title="حاسبة التكامل", page_icon="🧮", layout="centered")
 
-# === الكود السحري لإجبار الأزرار تكون في سطر واحد على الموبايل ===
+# === الكود المعدل لتقليل المسافات وجعل الأزرار متقاربة جداً ===
 st.markdown("""
 <style>
-/* إجبار العواميد إنها تفضل في سطر واحد وتسمح بالسحب يمين وشمال */
+/* إلغاء المسافات الكبيرة بين العواميد (الأزرار) */
 [data-testid="stHorizontalBlock"] {
+    gap: 0.2rem !important; /* ده السر اللي هيقربهم من بعض */
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
-    padding-bottom: 8px;
+    padding-bottom: 5px;
 }
-/* تصغير حجم العواميد عشان الزراير تلزق في بعضها */
+/* إجبار العواميد إنها تاخد مساحة الزرار بس */
 [data-testid="column"] {
-    width: auto !important;
+    width: fit-content !important;
+    min-width: fit-content !important;
     flex: 0 0 auto !important;
-    min-width: min-content !important;
-    padding: 0 2px !important;
+    padding: 0 !important;
 }
-/* تظبيط حجم الأزرار نفسها عشان ماتاخدش مساحة كبيرة */
+/* تصغير الأزرار نفسها وتظبيط الهوامش */
 .stButton > button {
-    padding: 2px 10px !important;
-    height: auto !important;
-    min-height: 38px !important;
+    width: auto !important;
+    padding: 2px 12px !important;
+    min-height: 35px !important;
+    margin: 0 !important;
 }
-/* شكل شريط التمرير (Scrollbar) */
+/* شكل شريط التمرير */
 [data-testid="stHorizontalBlock"]::-webkit-scrollbar {
     height: 4px;
 }
@@ -45,9 +47,9 @@ st.markdown("""
 st.title("🧮 حاسبة التكامل العددي التفاعلية")
 st.write("أدخل الدالة وحدد المعطيات لرؤية النتيجة والرسم البياني للمساحة تحت المنحنى.")
 
-# --- إدارة حالة النص (لربط الأزرار بخانة الدالة) ---
+# --- مسح النص الافتراضي (الخانة تبدأ فارغة) ---
 if 'func_text' not in st.session_state:
-    st.session_state.func_text = "e^(-x^2)"
+    st.session_state.func_text = ""
 
 def append_to_func(text):
     st.session_state.func_text += text
@@ -61,7 +63,6 @@ func_input = st.text_input("الدالة f(x):", key="func_text")
 # --- أزرار المساعدة العلمية ---
 st.markdown("<small><b>أزرار مساعدة (اسحب الشريط يميناً ويساراً):</b></small>", unsafe_allow_html=True)
 
-# حطينا كل الأزرار في صف واحد (14 عمود) والكود اللي فوق هيخليهم سطر واحد قابل للسحب
 cols = st.columns(14)
 cols[0].button("sin()", on_click=append_to_func, args=("sin(",))
 cols[1].button("cos()", on_click=append_to_func, args=("cos(",))
@@ -98,6 +99,11 @@ val = st.number_input("أدخل القيمة (n أو h):", value=4.0, min_value=
 
 # --- زر الحساب ---
 if st.button("🚀 احسب وارسم", type="primary", use_container_width=True):
+    # التأكد أن المستخدم أدخل دالة ولم يترك الخانة فارغة
+    if not func_input.strip():
+        st.warning("⚠️ يرجى إدخال الدالة أولاً في الخانة المخصصة.")
+        st.stop()
+        
     func_str = func_input.replace('^', '**').replace('ln', 'log') 
     
     if a >= b_val:
