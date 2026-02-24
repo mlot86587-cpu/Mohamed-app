@@ -7,7 +7,7 @@ from scipy.integrate import quad
 # === إعدادات الصفحة ===
 st.set_page_config(page_title="Numerical Integration", page_icon="✨", layout="wide")
 
-# === تصميم CSS (لوحة التحكم، المربعات، وأزرار الآلة الحاسبة) ===
+# === تصميم CSS ===
 st.markdown("""
 <style>
 .control-panel { background-color: #f8f9fa; padding: 20px; border-radius: 15px; border: 1px solid #e9ecef; }
@@ -21,7 +21,6 @@ div[data-testid="column"] { padding: 0 2px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# === إدارة حالة النص (لربط أزرار الآلة الحاسبة بالخانة فارغة بالبداية) ===
 if 'func_text' not in st.session_state:
     st.session_state.func_text = ""
 
@@ -41,12 +40,9 @@ with col_control:
     st.markdown("### 🎛️ إعدادات المسألة")
     st.markdown("---")
     
-    # خانة الدالة
     func_input = st.text_input("الدالة الرياضية f(x):", key="func_text", placeholder="مثال: x**2 + sin(x)")
     
-    # --- 🧮 لوحة المفاتيح الرياضية ---
     st.markdown("<small style='color:gray;'>لوحة الرموز الرياضية:</small>", unsafe_allow_html=True)
-    
     r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns(5)
     r1c1.button("sin", on_click=append_to_func, args=("sin(",))
     r1c2.button("cos", on_click=append_to_func, args=("cos(",))
@@ -70,15 +66,14 @@ with col_control:
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # --- نظام الزوايا (راديان أو درجات) ---
     angle_mode = st.radio("نظام الزوايا (للدوال المثلثية):", ["راديان (Rad)", "درجات (Deg)"], horizontal=True)
     
-    # --- الخانات الرقمية (تُترك فارغة افتراضياً) ---
+    # --- التعديل الجديد: خانات الحدود أصبحت نصية لتقبل الرموز ---
     c1, c2 = st.columns(2)
     with c1:
-        a = st.number_input("الحد الأدنى (a):", value=None, placeholder="اكتب رقم...")
+        a_str = st.text_input("الحد الأدنى (a):", value="", placeholder="مثال: 0, pi, e")
     with c2:
-        b_val = st.number_input("الحد الأقصى (b):", value=None, placeholder="اكتب رقم...")
+        b_str = st.text_input("الحد الأقصى (b):", value="", placeholder="مثال: pi/2, exp(1)")
         
     method = st.selectbox("اختر طريقة الحل:", [
         "شبه المنحرف (Trapezoidal)", 
@@ -97,25 +92,30 @@ with col_control:
 # ==========================================
 with col_display:
     if calc_btn:
-        # التأكد من تعبئة جميع الخانات
         if not func_input.strip():
             st.warning("⚠️ يرجى إدخال الدالة الرياضية أولاً.")
             st.stop()
-        if a is None or b_val is None or val is None:
+        if not a_str.strip() or not b_str.strip() or val is None:
             st.warning("⚠️ يرجى تعبئة خانات الحد الأدنى والأقصى والقيمة قبل الحساب.")
             st.stop()
             
         func_str = func_input.replace('^', '**').replace('ln', 'log')
         
-        if a >= b_val:
+        try:
+            # --- ترجمة الرموز في حدود التكامل إلى أرقام ---
+            a_val = float(sp.sympify(a_str, locals={'e': sp.E}))
+            b_val = float(sp.sympify(b_str, locals={'e': sp.E}))
+        except Exception:
+            st.error("❌ خطأ: يرجى كتابة حدود التكامل بشكل صحيح (أرقام أو رموز مثل pi و e).")
+            st.stop()
+        
+        if a_val >= b_val:
             st.error("❌ خطأ: الحد الأقصى يجب أن يكون أكبر من الحد الأدنى.")
         else:
             x = sp.Symbol('x')
             try:
-                # --- برمجة الراديان والدرجات ---
                 custom_dict = {'e': sp.E}
                 if "Deg" in angle_mode:
-                    # لو اختار درجات، البرنامج هيحول الزوايا تلقائياً للراديان في الخلفية عشان الحساب يظبط
                     custom_dict.update({
                         'sin': lambda arg: sp.sin(arg * sp.pi / 180),
                         'cos': lambda arg: sp.cos(arg * sp.pi / 180),
@@ -125,27 +125,23 @@ with col_display:
                         'atan': lambda arg: sp.atan(arg) * 180 / sp.pi,
                     })
 
-                # تعريف الدالة باستخدام القاموس المخصص
                 f_expr = sp.sympify(func_str, locals=custom_dict)
                 f = sp.lambdify(x, f_expr, "numpy")
-                f(a) # اختبار سريع
+                f(a_val) 
                 
-                # حساب القيمة الدقيقة (Exact)
-                exact_val, exact_error = quad(f, a, b_val)
+                exact_val, exact_error = quad(f, a_val, b_val)
                 
-                # معالجة (n) و (h)
                 if input_type == "لدي حجم الخطوة (h)":
                     h = val
-                    n_calc = (b_val - a) / h
+                    n_calc = (b_val - a_val) / h
                     n = int(round(n_calc))
                     if abs(n_calc - n) > 1e-6:
                         st.error(f"❌ خطأ: الخطوة h={h} لا تقسم المسافة بشكل صحيح.")
                         st.stop()
                 else:
                     n = int(val)
-                    h = (b_val - a) / n
+                    h = (b_val - a_val) / n
 
-                # التأكد من شروط سمبسون
                 if "1/3" in method and n % 2 != 0:
                     st.error(f"❌ خطأ: طريقة سمبسون 1/3 تتطلب (n) زوجياً. إدخالك يعطي n = {n}")
                     st.stop()
@@ -153,8 +149,7 @@ with col_display:
                     st.error(f"❌ خطأ: طريقة سمبسون 3/8 تتطلب (n) من مضاعفات 3. إدخالك يعطي n = {n}")
                     st.stop()
 
-                # الحساب العددي
-                x_vals = np.linspace(a, b_val, n + 1)
+                x_vals = np.linspace(a_val, b_val, n + 1)
                 y_vals = f(x_vals)
                 if isinstance(y_vals, (int, float)):
                     y_vals = np.full_like(x_vals, y_vals)
@@ -171,7 +166,6 @@ with col_display:
 
                 abs_error = abs(exact_val - approx_val)
 
-                # --- عرض النتائج ---
                 st.markdown("### 📈 ملخص النتائج")
                 res_col1, res_col2 = st.columns(2)
                 
@@ -192,9 +186,8 @@ with col_display:
                     </div>
                     """, unsafe_allow_html=True)
 
-                # --- الرسم البياني ---
                 st.markdown("### 🎨 الرسم البياني للمساحة")
-                x_smooth = np.linspace(a, b_val, 500)
+                x_smooth = np.linspace(a_val, b_val, 500)
                 y_smooth = f(x_smooth)
                 if isinstance(y_smooth, (int, float)):
                     y_smooth = np.full_like(x_smooth, y_smooth)
@@ -215,12 +208,5 @@ with col_display:
                 ax.set_ylabel("f(x)")
                 ax.set_xlabel("x")
                 ax.spines['top'].set_visible(False)
-                ax.spines['right'].set_visible(False)
-                
-                st.pyplot(fig)
-
-            except Exception as e:
-                st.error("❌ تأكد من كتابة الدالة بشكل صحيح. استخدم الأزرار لتجنب الأخطاء الإملائية.")
-    else:
-        st.info("👋 أهلاً بك! قم بإدخال الدالة وتحديد المعطيات، ثم اضغط على 'احسب وارسم'.")
+                ax.spines['right'].
  
