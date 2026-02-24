@@ -6,6 +6,24 @@ import matplotlib.pyplot as plt
 # إعدادات الصفحة
 st.set_page_config(page_title="حاسبة التكامل", page_icon="🧮", layout="centered")
 
+# === كود CSS لإجبار الأزرار تكون جنب بعض على الموبايل ===
+st.markdown("""
+<style>
+/* منع نزول العناصر لسطر جديد وجعلها قابلة للسحب الجانبي (Scroll) */
+div[data-testid="stHorizontalBlock"] {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    padding-bottom: 5px;
+}
+/* تصغير المسافات بين العواميد (الأزرار) لتوفير المساحة */
+div[data-testid="column"] {
+    min-width: fit-content !important;
+    padding: 0 3px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+# =======================================================
+
 st.title("🧮 حاسبة التكامل العددي التفاعلية")
 st.write("أدخل الدالة وحدد المعطيات لرؤية النتيجة والرسم البياني للمساحة تحت المنحنى.")
 
@@ -20,7 +38,6 @@ def clear_func():
     st.session_state.func_text = ""
 
 # --- واجهة المستخدم ---
-# تم ربط الخانة بالـ Session State عن طريق key="func_text"
 func_input = st.text_input("الدالة f(x):", key="func_text")
 
 # --- أزرار المساعدة العلمية ---
@@ -41,12 +58,12 @@ c8, c9, c10, c11, c12, c13, c14 = st.columns(7)
 c8.button("ln()", on_click=append_to_func, args=("ln(",))
 c9.button("e", on_click=append_to_func, args=("e",))
 c10.button("sqrt()", on_click=append_to_func, args=("sqrt(",))
-c11.button("pi (π)", on_click=append_to_func, args=("pi",))
+c11.button("pi", on_click=append_to_func, args=("pi",))
 c12.button("x²", on_click=append_to_func, args=("**2",))
 c13.button("^", on_click=append_to_func, args=("**",))
 c14.button("exp()", on_click=append_to_func, args=("exp(",))
 
-st.markdown("---") # خط فاصل للتنسيق
+st.markdown("---") 
 
 # --- إدخال باقي المعطيات ---
 col1, col2 = st.columns(2)
@@ -66,7 +83,6 @@ val = st.number_input("أدخل القيمة (n أو h):", value=4.0, min_value=
 
 # --- زر الحساب ---
 if st.button("🚀 احسب وارسم", type="primary", use_container_width=True):
-    # تحويل الرموز عشان مكتبة sympy تفهمها صح (مثلاً تحويل ln إلى log)
     func_str = func_input.replace('^', '**').replace('ln', 'log') 
     
     if a >= b_val:
@@ -74,12 +90,10 @@ if st.button("🚀 احسب وارسم", type="primary", use_container_width=Tru
     else:
         x = sp.Symbol('x')
         try:
-            # تحضير الدالة
             f_expr = sp.sympify(func_str, locals={'e': sp.E})
             f = sp.lambdify(x, f_expr, "numpy")
-            f(a) # اختبار سريع
+            f(a) 
             
-            # حساب n و h
             if input_type == "حجم الخطوة (h)":
                 h = val
                 n_calc = (b_val - a) / h
@@ -91,7 +105,6 @@ if st.button("🚀 احسب وارسم", type="primary", use_container_width=Tru
                 n = int(val)
                 h = (b_val - a) / n
 
-            # التأكد من الشروط
             if "1/3" in method and n % 2 != 0:
                 st.error(f"❌ خطأ: طريقة سمبسون 1/3 تتطلب (n) زوجياً، لكن المدخلات تعطي n = {n}")
                 st.stop()
@@ -99,7 +112,6 @@ if st.button("🚀 احسب وارسم", type="primary", use_container_width=Tru
                 st.error(f"❌ خطأ: طريقة سمبسون 3/8 تتطلب (n) من مضاعفات 3، لكن المدخلات تعطي n = {n}")
                 st.stop()
 
-            # الحسابات
             x_vals = np.linspace(a, b_val, n + 1)
             y_vals = f(x_vals)
             if isinstance(y_vals, (int, float)):
@@ -118,11 +130,9 @@ if st.button("🚀 احسب وارسم", type="primary", use_container_width=Tru
                         integral += 3 * y_vals[i]
                 result = (3 * h / 8) * integral
 
-            # طباعة النتيجة
             st.success("✅ تم الحساب بنجاح!")
             st.info(f"**النتيجة التقريبية = {float(result):.6f}** \n(عدد القطاعات: {n} | الخطوة: {h})")
 
-            # الرسم البياني
             x_smooth = np.linspace(a, b_val, 500)
             y_smooth = f(x_smooth)
             if isinstance(y_smooth, (int, float)):
@@ -144,7 +154,6 @@ if st.button("🚀 احسب وارسم", type="primary", use_container_width=Tru
             ax.legend()
             ax.grid(True, linestyle='--', alpha=0.6)
             
-            # عرض الرسمة في التطبيق
             st.pyplot(fig)
 
         except Exception as e:
