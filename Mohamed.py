@@ -86,7 +86,7 @@ col1, col2 = st.columns(2)
 with col1:
     a = st.number_input("الحد الأدنى (a):", value=0.0)
 with col2:
-    b_val = st.number_input("الحد الأقصى (b):", value=2.0)
+    b_val = st.number_input("الحد الأقصى (b):", value=0.0)
 
 method = st.selectbox("طريقة الحل:", [
     "شبه المنحرف (Trapezoidal)", 
@@ -95,7 +95,7 @@ method = st.selectbox("طريقة الحل:", [
 ])
 
 input_type = st.radio("المدخلات المتاحة:", ["عدد القطاعات (n)", "حجم الخطوة (h)"])
-val = st.number_input("أدخل القيمة (n أو h):", value=4.0, min_value=0.0001)
+val = st.number_input("أدخل القيمة (n أو h):", value=0.0, min_value=0.0001)
 
 # --- زر الحساب ---
 if st.button("🚀 احسب وارسم", type="primary", use_container_width=True):
