@@ -37,7 +37,8 @@ col_control, col_display = st.columns([1, 2.2])
 # ⚙️ العمود الأيسر: لوحة التحكم والآلة الحاسبة
 # ==========================================
 with col_control:
-    st.markdown("### 🎛️ إعدادات المسألة")
+    st.markdown("##حاسبة التكاملات 
+    👉 محمد خالد محمد الهادي👈 ")
     st.markdown("---")
     
     func_input = st.text_input("الدالة الرياضية f(x):", key="func_text", placeholder="مثال: x**2 + sin(x)")
