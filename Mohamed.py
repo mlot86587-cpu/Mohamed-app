@@ -148,9 +148,10 @@ with col_display:
             if "Root" in app_mode:
                 tol_val = float(sp.sympify(tol_str, locals={'e': sp.E}))
             
-        except Exception:
-            st.error("❌ خطأ: يرجى كتابة الدالة والأرقام بشكل صحيح.")
+                except Exception as e:
+            st.error(f"❌ خطأ: يرجى كتابة الدالة والأرقام بشكل صحيح. (التفاصيل: {e})")
             st.stop()
+
 
         # ========================================================
         # 🟢 تنفيذ كود حل المعادلات (Root Finding)
