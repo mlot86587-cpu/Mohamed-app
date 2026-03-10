@@ -7,7 +7,7 @@ from scipy.integrate import quad
 # === إعدادات الصفحة ===
 st.set_page_config(page_title="Numerical Analysis Pro", page_icon="🔢", layout="wide")
 
-# === تصميم CSS ===
+# === تصميم CSS (لجعل الأزرار تبدو كآلة حاسبة حقيقية متلاصقة) ===
 st.markdown("""
 <style>
 .control-panel { background-color: #f8f9fa; padding: 20px; border-radius: 15px; border: 1px solid #e9ecef; }
@@ -16,8 +16,17 @@ st.markdown("""
 .card-title { color: #6c757d; font-size: 16px; font-weight: bold; margin-bottom: 5px; }
 .card-value { color: #212529; font-size: 28px; font-weight: bold; }
 .card-subtext { color: #dc3545; font-size: 14px; margin-top: 5px; }
-div[data-testid="column"] { padding: 0 2px !important; }
-.stButton > button { width: 100% !important; padding: 2px 5px !important; font-size: 14px !important; font-weight: bold !important; height: 35px !important; margin-bottom: 5px !important; }
+
+/* تقليل المسافات بين أزرار الآلة الحاسبة وتكبير الخط */
+div[data-testid="column"] { padding: 0 3px !important; }
+.stButton > button { 
+    width: 100% !important; 
+    padding: 0px !important; 
+    font-size: 18px !important; 
+    font-weight: bold !important; 
+    height: 42px !important; 
+    margin-bottom: 4px !important; 
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -31,6 +40,9 @@ def append_to_func(text):
 def clear_func():
     st.session_state.func_text = ""
 
+def backspace_func():
+    st.session_state.func_text = st.session_state.func_text[:-1]
+
 # ==========================================
 # 📌 القائمة الجانبية (لاختيار القسم)
 # ==========================================
@@ -39,7 +51,7 @@ app_mode = st.sidebar.radio("اختر العملية المطلوبة:",
     ["📈 التكامل العددي (Integration)", "🎯 حل المعادلات (Root Finding)"]
 )
 st.sidebar.markdown("---")
-st.sidebar.info("💡 يمكنك التنقل بين الأقسام من هنا. الدالة التي تكتبها ستظل محفوظة حتى لو قمت بتغيير القسم.")
+st.sidebar.info("💡 اكتب الدالة باستخدام الآلة الحاسبة المدمجة لتجنب أخطاء لوحة مفاتيح الهاتف.")
 
 # === تقسيم الشاشة الأساسي ===
 col_control, col_display = st.columns([1, 2.5])
@@ -51,30 +63,53 @@ with col_control:
     st.markdown(f"### 🎛️ إعدادات {app_mode.split(' ')[1]}")
     st.markdown("---")
     
-    func_input = st.text_input("الدالة الرياضية f(x):", key="func_text", placeholder="مثال: x**2 - 4")
+    func_input = st.text_input("الدالة الرياضية f(x):", key="func_text", placeholder="استخدم الأزرار بالأسفل للكتابة...")
     
-    # --- 🧮 لوحة المفاتيح الرياضية ---
-    st.markdown("<small style='color:gray;'>لوحة الرموز الرياضية:</small>", unsafe_allow_html=True)
-    r1c1, r1c2, r1c3, r1c4, r1c5 = st.columns(5)
-    r1c1.button("sin", on_click=append_to_func, args=("sin(",))
-    r1c2.button("cos", on_click=append_to_func, args=("cos(",))
-    r1c3.button("tan", on_click=append_to_func, args=("tan(",))
-    r1c4.button("π", on_click=append_to_func, args=("pi",))
-    r1c5.button("🧹", on_click=clear_func, type="secondary", help="مسح الكل")
+    # --- 🧮 لوحة الآلة الحاسبة المتكاملة ---
+    st.markdown("<small style='color:gray;'>الآلة الحاسبة:</small>", unsafe_allow_html=True)
+    
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.button("sin", on_click=append_to_func, args=("sin(",))
+    c2.button("cos", on_click=append_to_func, args=("cos(",))
+    c3.button("tan", on_click=append_to_func, args=("tan(",))
+    c4.button("π", on_click=append_to_func, args=("pi",))
+    c5.button("🧹", on_click=clear_func, type="secondary", help="مسح الكل")
 
-    r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
-    r2c1.button("sin⁻¹", on_click=append_to_func, args=("asin(",))
-    r2c2.button("cos⁻¹", on_click=append_to_func, args=("acos(",))
-    r2c3.button("tan⁻¹", on_click=append_to_func, args=("atan(",))
-    r2c4.button("e", on_click=append_to_func, args=("e",))
-    r2c5.button("√x", on_click=append_to_func, args=("sqrt(",))
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.button("sin⁻¹", on_click=append_to_func, args=("asin(",))
+    c2.button("cos⁻¹", on_click=append_to_func, args=("acos(",))
+    c3.button("tan⁻¹", on_click=append_to_func, args=("atan(",))
+    c4.button("e^( )", on_click=append_to_func, args=("exp(",)) # الزرار بالشكل المطلوب
+    c5.button("√", on_click=append_to_func, args=("sqrt(",))
 
-    r3c1, r3c2, r3c3, r3c4, r3c5 = st.columns(5)
-    r3c1.button("ln", on_click=append_to_func, args=("ln(",))
-    r3c2.button("x²", on_click=append_to_func, args=("**2",))
-    r3c3.button("xʸ", on_click=append_to_func, args=("**",))
-    r3c4.button("÷", on_click=append_to_func, args=("/",))
-    r3c5.button("( )", on_click=append_to_func, args=("()",))
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.button("7", on_click=append_to_func, args=("7",))
+    c2.button("8", on_click=append_to_func, args=("8",))
+    c3.button("9", on_click=append_to_func, args=("9",))
+    c4.button("DEL", on_click=backspace_func) # زرار مسح حرف بحرف
+    c5.button("x", on_click=append_to_func, args=("x",))
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.button("4", on_click=append_to_func, args=("4",))
+    c2.button("5", on_click=append_to_func, args=("5",))
+    c3.button("6", on_click=append_to_func, args=("6",))
+    c4.button("×", on_click=append_to_func, args=("*",))
+    c5.button("÷", on_click=append_to_func, args=("/",))
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.button("1", on_click=append_to_func, args=("1",))
+    c2.button("2", on_click=append_to_func, args=("2",))
+    c3.button("3", on_click=append_to_func, args=("3",))
+    c4.button("+", on_click=append_to_func, args=("+",))
+    c5.button("-", on_click=append_to_func, args=("-",))
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.button("0", on_click=append_to_func, args=("0",))
+    c2.button(".", on_click=append_to_func, args=(".",))
+    c3.button("(", on_click=append_to_func, args=("(",))
+    c4.button(")", on_click=append_to_func, args=(")",))
+    c5.button("xʸ", on_click=append_to_func, args=("**",))
+
     st.markdown("<br>", unsafe_allow_html=True)
     
     angle_mode = st.radio("نظام الزوايا:", ["راديان (Rad)", "درجات (Deg)"], horizontal=True)
@@ -82,10 +117,10 @@ with col_control:
     if "Root" in app_mode:
         method = st.selectbox("اختر طريقة الحل:", ["طريقة التنصيف (Bisection)", "نيوتن-رافسون (Newton-Raphson)"])
         if "Bisection" in method:
-            c1, c2 = st.columns(2)
-            with c1:
+            col1, col2 = st.columns(2)
+            with col1:
                 a_str = st.text_input("من (a):", value="", placeholder="مثال: 0")
-            with c2:
+            with col2:
                 b_str = st.text_input("إلى (b):", value="", placeholder="مثال: 3")
         else:
             a_str = st.text_input("نقطة التخمين المبدئية (x0):", value="", placeholder="مثال: 1")
@@ -94,10 +129,10 @@ with col_control:
         tol_str = st.text_input("نسبة الخطأ المقبولة (Tolerance):", value="1e-6")
         
     else:
-        c1, c2 = st.columns(2)
-        with c1:
+        col1, col2 = st.columns(2)
+        with col1:
             a_str = st.text_input("الحد الأدنى (a):", value="", placeholder="مثال: 0")
-        with c2:
+        with col2:
             b_str = st.text_input("الحد الأقصى (b):", value="", placeholder="مثال: pi")
             
         method = st.selectbox("اختر طريقة الحل:", ["شبه المنحرف (Trapezoidal)", "سمبسون 1/3 (Simpson 1/3)", "سمبسون 3/8 (Simpson 3/8)"])
@@ -116,10 +151,14 @@ with col_display:
             st.warning("⚠️ يرجى تعبئة الدالة والحدود أولاً.")
             st.stop()
             
-        func_str = func_input.replace('^', '**').replace('ln', 'log')
-        x = sp.Symbol('x')
+        # 💡 السر هنا: مسح أي مسافات حطها كيبورد الموبايل بالغلط
+        func_clean = func_input.replace('^', '**').replace('ln', 'log').replace(' ', '')
+        a_clean = a_str.replace(' ', '')
+        b_clean = b_str.replace(' ', '')
         
+        x = sp.Symbol('x')
         custom_dict = {'e': sp.E}
+        
         if "Deg" in angle_mode:
             custom_dict.update({
                 'sin': lambda arg: sp.sin(arg * sp.pi / 180),
@@ -128,16 +167,17 @@ with col_display:
             })
 
         try:
-            f_expr = sp.sympify(func_str, locals=custom_dict)
+            f_expr = sp.sympify(func_clean, locals=custom_dict)
             f = sp.lambdify(x, f_expr, "numpy")
-            a_val = float(sp.sympify(a_str, locals={'e': sp.E}))
-            b_val = float(sp.sympify(b_str, locals={'e': sp.E}))
+            a_val = float(sp.sympify(a_clean, locals={'e': sp.E}))
+            b_val = float(sp.sympify(b_clean, locals={'e': sp.E}))
             
             if "Root" in app_mode:
-                tol_val = float(sp.sympify(tol_str, locals={'e': sp.E}))
+                tol_clean = tol_str.replace(' ', '') # مسح مسافات الـ Tolerance
+                tol_val = float(sp.sympify(tol_clean, locals={'e': sp.E}))
             
         except Exception as e:
-            st.error(f"❌ خطأ: يرجى كتابة الدالة والأرقام بشكل صحيح. (التفاصيل: {e})")
+            st.error(f"❌ خطأ: يرجى كتابة الدالة والأرقام بشكل صحيح. تأكد من إغلاق الأقواس. (السبب البرمجي: {e})")
             st.stop()
 
         # ========================================================
@@ -213,7 +253,6 @@ with col_display:
             y_smooth = f(x_smooth)
             if isinstance(y_smooth, (int, float)): y_smooth = np.full_like(x_smooth, y_smooth)
 
-            # --- التصميم الاحترافي للرسم البياني ---
             fig, ax = plt.subplots(figsize=(10, 5))
             ax.plot(x_smooth, y_smooth, color='#2d82ff', linewidth=2.5, label='f(x)')
             ax.axhline(0, color='#ff4b4b', linewidth=1.5, linestyle='--')
@@ -284,7 +323,6 @@ with col_display:
             y_smooth = f(x_smooth)
             if isinstance(y_smooth, (int, float)): y_smooth = np.full_like(x_smooth, y_smooth)
 
-            # --- التصميم الاحترافي للرسم البياني للتكامل ---
             fig, ax = plt.subplots(figsize=(10, 5))
             ax.plot(x_smooth, y_smooth, color='#2d82ff', linewidth=2.5, label='f(x)')
             
@@ -306,3 +344,4 @@ with col_display:
             
     else:
         st.info(f"👋 أهلاً بك! أنت الآن في وضع {app_mode.split(' ')[1]}. قم بإدخال البيانات واضغط على احسب.")
+                 
