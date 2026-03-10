@@ -42,10 +42,10 @@ st.sidebar.markdown("---")
 st.sidebar.info("💡 يمكنك التنقل بين الأقسام من هنا. الدالة التي تكتبها ستظل محفوظة حتى لو قمت بتغيير القسم.")
 
 # === تقسيم الشاشة الأساسي ===
-col_control, col_display = st.columns([1, 2.2])
+col_control, col_display = st.columns([1, 2.5])
 
 # ==========================================
-# ⚙️ العمود الأيسر: لوحة التحكم والآلة الحاسبة (مشترك)
+# ⚙️ العمود الأيسر: لوحة التحكم والآلة الحاسبة
 # ==========================================
 with col_control:
     st.markdown(f"### 🎛️ إعدادات {app_mode.split(' ')[1]}")
@@ -79,30 +79,20 @@ with col_control:
     
     angle_mode = st.radio("نظام الزوايا:", ["راديان (Rad)", "درجات (Deg)"], horizontal=True)
 
-    # ---------------------------------------------------------
-    # إعدادات قسم (حل المعادلات - Root Finding)
-    # ---------------------------------------------------------
     if "Root" in app_mode:
         method = st.selectbox("اختر طريقة الحل:", ["طريقة التنصيف (Bisection)", "نيوتن-رافسون (Newton-Raphson)"])
-        
-        # تغيير الخانات بناءً على الطريقة
         if "Bisection" in method:
-            st.info("طريقة التنصيف تتطلب نقطتين (بداية ونهاية) تحيطان بالجذر.")
             c1, c2 = st.columns(2)
             with c1:
                 a_str = st.text_input("من (a):", value="", placeholder="مثال: 0")
             with c2:
                 b_str = st.text_input("إلى (b):", value="", placeholder="مثال: 3")
         else:
-            st.info("طريقة نيوتن تتطلب نقطة تخمين مبدئية واحدة فقط.")
             a_str = st.text_input("نقطة التخمين المبدئية (x0):", value="", placeholder="مثال: 1")
-            b_str = "0" # قيمة وهمية عشان الكود ميديناش إيرور
+            b_str = "0"
             
         tol_str = st.text_input("نسبة الخطأ المقبولة (Tolerance):", value="1e-6")
         
-    # ---------------------------------------------------------
-    # إعدادات قسم (التكامل العددي - Integration)
-    # ---------------------------------------------------------
     else:
         c1, c2 = st.columns(2)
         with c1:
@@ -117,7 +107,6 @@ with col_control:
     st.markdown("<br>", unsafe_allow_html=True)
     calc_btn = st.button("🚀 احسب وارسم", type="primary", use_container_width=True)
 
-
 # ==========================================
 # 📊 العمود الأيمن: شاشة النتائج والرسم
 # ==========================================
@@ -130,7 +119,6 @@ with col_display:
         func_str = func_input.replace('^', '**').replace('ln', 'log')
         x = sp.Symbol('x')
         
-        # تحضير بيئة بايثون (زوايا راديان أو درجات)
         custom_dict = {'e': sp.E}
         if "Deg" in angle_mode:
             custom_dict.update({
@@ -148,10 +136,9 @@ with col_display:
             if "Root" in app_mode:
                 tol_val = float(sp.sympify(tol_str, locals={'e': sp.E}))
             
-               e: except Exception as 
+        except Exception as e:
             st.error(f"❌ خطأ: يرجى كتابة الدالة والأرقام بشكل صحيح. (التفاصيل: {e})")
             st.stop()
-
 
         # ========================================================
         # 🟢 تنفيذ كود حل المعادلات (Root Finding)
@@ -161,7 +148,6 @@ with col_display:
             iterations = 0
             error = 0
             
-            # --- 1. طريقة التنصيف (Bisection) ---
             if "Bisection" in method:
                 if a_val >= b_val:
                     st.error("❌ خطأ: النقطة (b) يجب أن تكون أكبر من (a).")
@@ -171,11 +157,11 @@ with col_display:
                 fb = f(b_val)
                 
                 if fa * fb > 0:
-                    st.error(f"❌ خطأ: الدالة لا تقطع محور السينات بين {a_val} و {b_val}. (f(a) و f(b) لهما نفس الإشارة).")
+                    st.error(f"❌ خطأ: الدالة لا تقطع محور السينات بين {a_val} و {b_val}.")
                     st.stop()
                 
                 a_temp, b_temp = a_val, b_val
-                for i in range(100): # بحد أقصى 100 محاولة
+                for i in range(100):
                     c = (a_temp + b_temp) / 2.0
                     fc = f(c)
                     if abs(fc) < tol_val or (b_temp - a_temp) / 2.0 < tol_val:
@@ -186,20 +172,17 @@ with col_display:
                     else:
                         a_temp = c
                         fa = fc
-                
-                if root is None: # لو موصلش للحل
-                    root, iterations, error = c, 100, abs(fc)
+                if root is None: root, iterations, error = c, 100, abs(fc)
 
-            # --- 2. طريقة نيوتن-رافسون (Newton) ---
             else:
                 try:
-                    df_expr = sp.diff(f_expr, x) # الاشتقاق أوتوماتيك
+                    df_expr = sp.diff(f_expr, x)
                     df = sp.lambdify(x, df_expr, "numpy")
                 except Exception:
                     st.error("❌ فشل في حساب اشتقاق الدالة.")
                     st.stop()
                 
-                x_curr = a_val # x0
+                x_curr = a_val
                 for i in range(100):
                     fx = f(x_curr)
                     dfx = df(x_curr)
@@ -212,57 +195,41 @@ with col_display:
                         root, iterations, error = x_next, i+1, abs(f(x_next))
                         break
                     x_curr = x_next
-                
-                if root is None:
-                    root, iterations, error = x_curr, 100, abs(f(x_curr))
+                if root is None: root, iterations, error = x_curr, 100, abs(f(x_curr))
 
-            # --- عرض نتائج الجذور ---
             st.markdown("### 🎯 ملخص إيجاد الجذر")
             res_col1, res_col2 = st.columns(2)
             with res_col1:
-                st.markdown(f"""
-                <div class='result-card exact-card'>
-                    <div class='card-title'>📍 قيمة الجذر (Root)</div>
-                    <div class='card-value'>{root:.6f}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"<div class='result-card exact-card'><div class='card-title'>📍 قيمة الجذر (Root)</div><div class='card-value'>{root:.6f}</div></div>", unsafe_allow_html=True)
             with res_col2:
-                st.markdown(f"""
-                <div class='result-card'>
-                    <div class='card-title'>⚙️ الأداء (Performance)</div>
-                    <div class='card-value' style='font-size:22px;'>الخطأ: {error:.2e}</div>
-                    <div class='card-subtext'>تم الوصول للحل بعد {iterations} خطوة (Iterations)</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"<div class='result-card'><div class='card-title'>⚙️ الأداء (Performance)</div><div class='card-value' style='font-size:22px;'>الخطأ: {error:.2e}</div><div class='card-subtext'>تم الوصول للحل بعد {iterations} خطوة</div></div>", unsafe_allow_html=True)
                 
-            # --- رسم الجذور ---
             st.markdown("### 🎨 الرسم البياني لتقاطع الدالة")
-            # نظبط الرسمة عشان تبان حوالين الجذر
             x_min = root - 2 if root != 0 else -2
             x_max = root + 2 if root != 0 else 2
-            
-            # لو طريقة تنصيف، نخلي الرسمة تشمل a و b
-            if "Bisection" in method:
-                x_min, x_max = min(a_val, root-1), max(b_val, root+1)
+            if "Bisection" in method: x_min, x_max = min(a_val, root-1), max(b_val, root+1)
 
             x_smooth = np.linspace(x_min, x_max, 500)
             y_smooth = f(x_smooth)
             if isinstance(y_smooth, (int, float)): y_smooth = np.full_like(x_smooth, y_smooth)
 
-            fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(x_smooth, y_smooth, color='#007bff', linewidth=2, label='f(x)')
-            ax.axhline(0, color='red', linewidth=1.5, linestyle='--') # محور السينات
-            ax.plot(root, 0, 'go', markersize=10, label=f'Root: {root:.4f}') # النقطة الخضرا
+            # --- التصميم الاحترافي للرسم البياني ---
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.plot(x_smooth, y_smooth, color='#2d82ff', linewidth=2.5, label='f(x)')
+            ax.axhline(0, color='#ff4b4b', linewidth=1.5, linestyle='--')
+            ax.plot(root, 0, marker='o', color='#28a745', markersize=10, label=f'Root: {root:.4f}')
             
-            ax.grid(True, linestyle='--', alpha=0.5)
+            ax.grid(True, linestyle='--', alpha=0.4)
             ax.legend()
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_color('#dddddd')
+            ax.spines['bottom'].set_color('#dddddd')
             st.pyplot(fig)
 
 
         # ========================================================
-        # 🔵 تنفيذ كود التكامل (Integration) - نفس الكود السابق
+        # 🔵 تنفيذ كود التكامل (Integration)
         # ========================================================
         else:
             if val is None:
@@ -317,20 +284,24 @@ with col_display:
             y_smooth = f(x_smooth)
             if isinstance(y_smooth, (int, float)): y_smooth = np.full_like(x_smooth, y_smooth)
 
-            fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(x_smooth, y_smooth, color='#007bff', linewidth=2, label='f(x)')
+            # --- التصميم الاحترافي للرسم البياني للتكامل ---
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.plot(x_smooth, y_smooth, color='#2d82ff', linewidth=2.5, label='f(x)')
+            
             if n <= 100:
                 for i in range(n):
                     xs = [x_vals[i], x_vals[i], x_vals[i+1], x_vals[i+1]]
                     ys = [0, y_vals[i], y_vals[i+1], 0]
-                    ax.fill(xs, ys, color='#007bff', alpha=0.15, edgecolor='#0056b3', linewidth=1)
+                    ax.fill(xs, ys, color='#2d82ff', alpha=0.15, edgecolor='#0056b3', linewidth=1)
             else:
-                ax.fill_between(x_smooth, 0, y_smooth, color='#007bff', alpha=0.2)
+                ax.fill_between(x_smooth, 0, y_smooth, color='#2d82ff', alpha=0.15)
             
-            ax.axhline(0, color='black', linewidth=1)
-            ax.grid(True, linestyle='--', alpha=0.5)
+            ax.axhline(0, color='black', linewidth=1, alpha=0.7)
+            ax.grid(True, linestyle='--', alpha=0.4)
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_color('#dddddd')
+            ax.spines['bottom'].set_color('#dddddd')
             st.pyplot(fig)
             
     else:
