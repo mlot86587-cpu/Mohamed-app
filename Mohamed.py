@@ -8,40 +8,29 @@ import pandas as pd
 # === إعدادات الصفحة ===
 st.set_page_config(page_title="Numerical Analysis Pro", page_icon="🔢", layout="wide")
 
-# === تصميم CSS (متوافق مع الوضع الليلي Dark Mode) ===
+# === تصميم CSS ===
 st.markdown("""
 <style>
-/* استخدام ألوان متغيرة لتتوافق مع الوضع الفاتح والليلي تلقائياً */
-.result-card { 
-    background-color: var(--secondary-background-color); 
-    padding: 20px; 
-    border-radius: 15px; 
-    border-left: 5px solid #007bff; 
-    margin-bottom: 20px; 
-}
+.result-card { background-color: var(--secondary-background-color); padding: 20px; border-radius: 15px; border-left: 5px solid #007bff; margin-bottom: 20px; }
 .exact-card { border-left: 5px solid #28a745; }
 .card-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; opacity: 0.8; }
 .card-value { font-size: 28px; font-weight: bold; color: #2d82ff; }
 .exact-value { color: #28a745; }
 .card-subtext { font-size: 14px; margin-top: 5px; opacity: 0.7; }
-
-/* أزرار الآلة الحاسبة */
 div[data-testid="column"] { padding: 0 3px !important; }
 .stButton > button { width: 100% !important; padding: 0px !important; font-size: 18px !important; font-weight: bold !important; height: 42px !important; margin-bottom: 4px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# === إدارة حالة النص والأمثلة ===
-if 'func_text' not in st.session_state:
-    st.session_state.func_text = ""
-if 'preset' not in st.session_state:
-    st.session_state.preset = "اختر مثالاً..."
+# === إدارة حالة النص والسجل ===
+if 'func_text' not in st.session_state: st.session_state.func_text = ""
+if 'preset' not in st.session_state: st.session_state.preset = "اختر مثالاً..."
+if 'history' not in st.session_state: st.session_state.history = [] # 💡 هنا عملنا السجل
 
 def append_to_func(text): st.session_state.func_text += text
 def clear_func(): st.session_state.func_text = ""
 def backspace_func(): st.session_state.func_text = st.session_state.func_text[:-1]
 
-# وظيفة الأمثلة الجاهزة
 def apply_preset():
     p = st.session_state.preset
     if p == "تكامل: دالة أسية (جرسية)": st.session_state.func_text = "exp(-x**2)"
@@ -50,16 +39,32 @@ def apply_preset():
     elif p == "جذور: دالة أسية": st.session_state.func_text = "exp(-x) - x"
 
 # ==========================================
-# 📌 القائمة الجانبية
+# 📌 القائمة الجانبية (ومكان السجل)
 # ==========================================
 st.sidebar.title("🧮 الأقسام الرياضية")
 app_mode = st.sidebar.radio("اختر العملية المطلوبة:", ["📈 التكامل العددي (Integration)", "🎯 حل المعادلات (Root Finding)"])
 st.sidebar.markdown("---")
 
-# زر الأمثلة الجاهزة
 st.sidebar.selectbox("💡 أمثلة سريعة للتدريب:", 
     ["اختر مثالاً...", "تكامل: دالة أسية (جرسية)", "تكامل: دالة مثلثية", "جذور: دالة تكعيبية", "جذور: دالة أسية"], 
     key='preset', on_change=apply_preset)
+
+# --- 🕒 تصميم سجل العمليات ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🕒 سجل العمليات (History)")
+
+# زر مسح السجل
+if st.sidebar.button("🗑️ مسح السجل", use_container_width=True):
+    st.session_state.history = []
+    st.rerun()
+
+# عرض محتويات السجل (الأحدث فوق)
+if not st.session_state.history:
+    st.sidebar.info("السجل فارغ. ابدأ الحساب الآن!")
+else:
+    for item in reversed(st.session_state.history):
+        st.sidebar.success(item)
+
 
 # === تقسيم الشاشة الأساسي ===
 col_control, col_display = st.columns([1, 2.5])
@@ -72,7 +77,6 @@ with col_control:
     
     func_input = st.text_input("الدالة الرياضية f(x):", key="func_text", placeholder="استخدم الآلة الحاسبة للكتابة...")
     
-    # 🧮 الآلة الحاسبة القابلة للطي (عشان نوفر مساحة)
     with st.expander("🧮 إظهار / إخفاء الآلة الحاسبة", expanded=False):
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.button("sin", on_click=append_to_func, args=("sin(",))
@@ -148,7 +152,6 @@ with col_display:
             st.warning("⚠️ يرجى تعبئة الدالة والحدود أولاً.")
             st.stop()
             
-        # تنظيف المدخلات من المسافات المخفية
         func_clean = func_input.replace('^', '**').replace('ln', 'log').replace(' ', '')
         a_clean = a_str.replace(' ', '')
         b_clean = b_str.replace(' ', '')
@@ -171,7 +174,7 @@ with col_display:
             st.stop()
 
         # ========================================================
-        # 🟢 تنفيذ كود حل المعادلات (Root Finding)
+        # 🟢 تنفيذ كود حل المعادلات
         # ========================================================
         if "Root" in app_mode:
             root, iterations, error = None, 0, 0
@@ -210,8 +213,11 @@ with col_display:
             res_col1, res_col2 = st.columns(2)
             with res_col1: st.markdown(f"<div class='result-card exact-card'><div class='card-title'>📍 قيمة الجذر (Root)</div><div class='card-value exact-value'>{root:.6f}</div></div>", unsafe_allow_html=True)
             with res_col2: st.markdown(f"<div class='result-card'><div class='card-title'>⚙️ الأداء (Performance)</div><div class='card-value' style='font-size:22px;'>الخطأ: {error:.2e}</div><div class='card-subtext'>تم الوصول للحل بعد {iterations} خطوة</div></div>", unsafe_allow_html=True)
-                
-            # الرسم التفاعلي بـ Plotly
+            
+            # 💡 حفظ العملية في السجل
+            history_str = f"🎯 **جذر:** `{func_input}`\n\n**النتيجة:** `{root:.5f}`"
+            st.session_state.history.append(history_str)
+
             st.markdown("### 🎨 الرسم البياني التفاعلي")
             x_min, x_max = root - 2, root + 2
             if "Bisection" in method: x_min, x_max = min(a_val, root-1), max(b_val, root+1)
@@ -227,7 +233,7 @@ with col_display:
             st.plotly_chart(fig, use_container_width=True)
 
         # ========================================================
-        # 🔵 تنفيذ كود التكامل (Integration) مع جدول المقارنة
+        # 🔵 تنفيذ كود التكامل (Integration)
         # ========================================================
         else:
             if a_val >= b_val: st.error("❌ الحد الأقصى يجب أن يكون أكبر من الحد الأدنى."); st.stop()
@@ -244,7 +250,6 @@ with col_display:
             y_vals = f(x_vals)
             if isinstance(y_vals, (int, float)): y_vals = np.full_like(x_vals, y_vals)
 
-            # حساب الـ 3 طرق للمقارنة
             trap_val = (h / 2) * (y_vals[0] + 2 * np.sum(y_vals[1:-1]) + y_vals[-1])
             simp13_val = (h / 3) * (y_vals[0] + 4 * np.sum(y_vals[1:-1:2]) + 2 * np.sum(y_vals[2:-2:2]) + y_vals[-1]) if n % 2 == 0 else None
             
@@ -256,7 +261,10 @@ with col_display:
 
             st.markdown(f"<div class='result-card exact-card'><div class='card-title'>🎯 القيمة الدقيقة التحليلية (Exact Integration)</div><div class='card-value exact-value'>{exact_val:.8f}</div></div>", unsafe_allow_html=True)
             
-            # جدول المقارنة الشامل
+            # 💡 حفظ العملية في السجل
+            history_str = f"📈 **تكامل:** `{func_input}`\n\n**من:** `{a_val}` **إلى:** `{b_val}`\n\n**النتيجة:** `{exact_val:.5f}`"
+            st.session_state.history.append(history_str)
+
             st.markdown("### ⚖️ مقارنة طرق التكامل")
             df_data = []
             methods_list = [
@@ -275,18 +283,14 @@ with col_display:
             df = pd.DataFrame(df_data)
             st.dataframe(df, use_container_width=True, hide_index=True)
 
-            # الرسم التفاعلي بـ Plotly
             st.markdown("### 🎨 الرسم البياني التفاعلي للمساحة")
             x_smooth = np.linspace(a_val, b_val, 500)
             y_smooth = f(x_smooth)
             if isinstance(y_smooth, (int, float)): y_smooth = np.full_like(x_smooth, y_smooth)
 
             fig = go.Figure()
-            # المنحنى الأساسي
             fig.add_trace(go.Scatter(x=x_smooth, y=y_smooth, mode='lines', name='f(x)', line=dict(color='#2d82ff', width=3)))
-            # تظليل المساحة
             fig.add_trace(go.Scatter(x=x_smooth, y=y_smooth, fill='tozeroy', fillcolor='rgba(45, 130, 255, 0.2)', mode='none', name='Area'))
-            
             fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
             st.plotly_chart(fig, use_container_width=True)
             
