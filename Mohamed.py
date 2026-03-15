@@ -25,7 +25,7 @@ div[data-testid="column"] { padding: 0 3px !important; }
 # === إدارة حالة النص والسجل ===
 if 'func_text' not in st.session_state: st.session_state.func_text = ""
 if 'preset' not in st.session_state: st.session_state.preset = "اختر مثالاً..."
-if 'history' not in st.session_state: st.session_state.history = [] # 💡 هنا عملنا السجل
+if 'history' not in st.session_state: st.session_state.history = []
 
 def append_to_func(text): st.session_state.func_text += text
 def clear_func(): st.session_state.func_text = ""
