@@ -39,7 +39,7 @@ def apply_preset():
     elif p == "جذور: دالة أسية": st.session_state.func_text = "exp(-x) - x"
 
 # ==========================================
-# 📌 القائمة الجانبية (ومكان السجل)
+# 📌 القائمة الجانبية (ومكان السجل والتحكم في الدقة)
 # ==========================================
 st.sidebar.title("🧮 الأقسام الرياضية")
 app_mode = st.sidebar.radio("اختر العملية المطلوبة:", ["📈 التكامل العددي (Integration)", "🎯 حل المعادلات (Root Finding)"])
@@ -48,6 +48,10 @@ st.sidebar.markdown("---")
 st.sidebar.selectbox("💡 أمثلة سريعة للتدريب:", 
     ["اختر مثالاً...", "تكامل: دالة أسية (جرسية)", "تكامل: دالة مثلثية", "جذور: دالة تكعيبية", "جذور: دالة أسية"], 
     key='preset', on_change=apply_preset)
+
+# --- 🎯 إضافة شريط للتحكم في دقة الأرقام ---
+st.sidebar.markdown("---")
+dp = st.sidebar.slider("🎯 دقة الأرقام (Decimal Places):", min_value=2, max_value=10, value=6)
 
 # --- 🕒 تصميم سجل العمليات ---
 st.sidebar.markdown("---")
@@ -119,15 +123,26 @@ with col_control:
     angle_mode = st.radio("نظام الزوايا:", ["راديان (Rad)", "درجات (Deg)"], horizontal=True)
 
     if "Root" in app_mode:
-        method = st.selectbox("اختر طريقة الحل:", ["طريقة التنصيف (Bisection)", "نيوتن-رافسون (Newton-Raphson)"])
-        if "Bisection" in method:
+        # إضافة الطرق الجديدة
+        method = st.selectbox("اختر طريقة الحل:", [
+            "طريقة التنصيف (Bisection)", 
+            "الوضع الخاطئ (False Position)",
+            "نيوتن-رافسون (Newton-Raphson)",
+            "طريقة القاطع (Secant)"
+        ])
+        
+        if method in ["طريقة التنصيف (Bisection)", "الوضع الخاطئ (False Position)"]:
             col1, col2 = st.columns(2)
             with col1: a_str = st.text_input("من (a):", value="0")
             with col2: b_str = st.text_input("إلى (b):", value="2")
-        else:
-            # كما طلب في الريكورد: إدخال قيمة x0 المبدئية
+        elif "Newton" in method:
             a_str = st.text_input("نقطة التخمين المبدئية (x0):", value="1")
             b_str = "0"
+        elif "Secant" in method:
+            col1, col2 = st.columns(2)
+            with col1: a_str = st.text_input("التخمين الأول (x0):", value="0")
+            with col2: b_str = st.text_input("التخمين الثاني (x1):", value="1")
+            
         tol_str = st.text_input("نسبة الخطأ المقبولة (Tolerance):", value="1e-6")
     else:
         col1, col2 = st.columns(2)
@@ -171,30 +186,45 @@ with col_display:
             st.stop()
 
         # ========================================================
-        # 🟢 تنفيذ كود حل المعادلات (مع إضافة جدول الخطوات)
+        # 🟢 تنفيذ كود حل المعادلات (مع القوانين والتحميل)
         # ========================================================
         if "Root" in app_mode:
             root, iterations, error = None, 0, 0
-            steps_data = [] # مصفوفة لحفظ خطوات الحل لعرضها في جدول
+            steps_data = [] 
             
+            # --- عرض القانون الرياضي بـ LaTeX ---
+            st.markdown("### 📚 القانون الرياضي المستخدم:")
             if "Bisection" in method:
+                st.latex(r"x_{root} = \frac{a + b}{2}")
+            elif "False Position" in method:
+                st.latex(r"x_{root} = \frac{a \cdot f(b) - b \cdot f(a)}{f(b) - f(a)}")
+            elif "Newton" in method:
+                st.latex(r"x_{i+1} = x_i - \frac{f(x_i)}{f'(x_i)}")
+            elif "Secant" in method:
+                st.latex(r"x_{i+1} = x_i - f(x_i) \frac{x_i - x_{i-1}}{f(x_i) - f(x_{i-1})}")
+            
+            # --- المنطق الرياضي للطرق ---
+            if method in ["طريقة التنصيف (Bisection)", "الوضع الخاطئ (False Position)"]:
                 if a_val >= b_val: st.error("❌ النقطة (b) يجب أن تكون أكبر من (a)."); st.stop()
                 fa, fb = f(a_val), f(b_val)
-                if fa * fb > 0: st.error(f"❌ الدالة لا تقطع محور السينات بين {a_val} و {b_val}."); st.stop()
+                if fa * fb > 0: st.error(f"❌ الدالة لا تقطع محور السينات بين {a_val} و {b_val}. (f(a) و f(b) نفس الإشارة)"); st.stop()
                 
                 a_temp, b_temp = a_val, b_val
                 for i in range(100):
-                    c = (a_temp + b_temp) / 2.0
+                    if "Bisection" in method:
+                        c = (a_temp + b_temp) / 2.0
+                    else:
+                        c = (a_temp * f(b_temp) - b_temp * f(a_temp)) / (f(b_temp) - f(a_temp))
+                        
                     fc = f(c)
-                    current_error = (b_temp - a_temp) / 2.0
+                    current_error = abs(b_temp - a_temp) / 2.0 if "Bisection" in method else abs(fc)
                     
-                    # حفظ بيانات الخطوة
                     steps_data.append({
                         "Iteration": i + 1,
-                        "a": f"{a_temp:.6f}",
-                        "b": f"{b_temp:.6f}",
-                        "c (Midpoint)": f"{c:.6f}",
-                        "f(c)": f"{fc:.6f}",
+                        "a": f"{a_temp:.{dp}f}",
+                        "b": f"{b_temp:.{dp}f}",
+                        "Root (c)": f"{c:.{dp}f}",
+                        "f(c)": f"{fc:.{dp}f}",
                         "Error": f"{current_error:.2e}"
                     })
                     
@@ -206,14 +236,13 @@ with col_display:
                     else: a_temp, fa = c, fc
                 if root is None: root, iterations, error = c, 100, abs(fc)
 
-            else:
-                # طريقة نيوتن كما طُلِب في الريكورد
+            elif "Newton" in method:
                 try:
                     df_expr = sp.diff(f_expr, x)
                     df = sp.lambdify(x, df_expr, "numpy")
                 except Exception: st.error("❌ فشل في حساب اشتقاق الدالة."); st.stop()
                 
-                x_curr = a_val # x0 اللي اليوزر بيدخلها
+                x_curr = a_val 
                 for i in range(100):
                     fx, dfx = f(x_curr), df(x_curr)
                     if dfx == 0: st.error("❌ المشتقة تساوي صفر، طريقة نيوتن تفشل هنا."); st.stop()
@@ -221,13 +250,12 @@ with col_display:
                     x_next = x_curr - fx / dfx
                     current_error = abs(x_next - x_curr)
                     
-                    # حفظ بيانات كل محاولة (x1, x2, x3...)
                     steps_data.append({
                         "Iteration (i)": i + 1,
-                        "X_i": f"{x_curr:.6f}",
-                        "f(X_i)": f"{fx:.6f}",
-                        "f'(X_i)": f"{dfx:.6f}",
-                        "X_i+1": f"{x_next:.6f}",
+                        "X_i": f"{x_curr:.{dp}f}",
+                        "f(X_i)": f"{fx:.{dp}f}",
+                        "f'(X_i)": f"{dfx:.{dp}f}",
+                        "X_i+1": f"{x_next:.{dp}f}",
                         "Error": f"{current_error:.2e}"
                     })
                     
@@ -237,20 +265,55 @@ with col_display:
                     x_curr = x_next
                 if root is None: root, iterations, error = x_curr, 100, abs(f(x_curr))
 
+            elif "Secant" in method:
+                x0, x1 = a_val, b_val
+                for i in range(100):
+                    f0, f1 = f(x0), f(x1)
+                    if f1 - f0 == 0: st.error("❌ القسمة على صفر، طريقة القاطع تفشل هنا."); st.stop()
+                    
+                    x2 = x1 - f1 * (x1 - x0) / (f1 - f0)
+                    current_error = abs(x2 - x1)
+                    
+                    steps_data.append({
+                        "Iteration (i)": i + 1,
+                        "X_{i-1}": f"{x0:.{dp}f}",
+                        "X_i": f"{x1:.{dp}f}",
+                        "f(X_i)": f"{f1:.{dp}f}",
+                        "X_{i+1}": f"{x2:.{dp}f}",
+                        "Error": f"{current_error:.2e}"
+                    })
+                    
+                    if current_error < tol_val:
+                        root, iterations, error = x2, i+1, abs(f(x2))
+                        break
+                    x0, x1 = x1, x2
+                if root is None: root, iterations, error = x2, 100, abs(f(x2))
+
+            # --- عرض النتائج ---
             res_col1, res_col2 = st.columns(2)
-            with res_col1: st.markdown(f"<div class='result-card exact-card'><div class='card-title'>📍 قيمة الجذر النهائي (Root)</div><div class='card-value exact-value'>{root:.6f}</div></div>", unsafe_allow_html=True)
+            with res_col1: st.markdown(f"<div class='result-card exact-card'><div class='card-title'>📍 قيمة الجذر النهائي (Root)</div><div class='card-value exact-value'>{root:.{dp}f}</div></div>", unsafe_allow_html=True)
             with res_col2: st.markdown(f"<div class='result-card'><div class='card-title'>⚙️ الأداء (Performance)</div><div class='card-value' style='font-size:22px;'>الخطأ: {error:.2e}</div><div class='card-subtext'>تم الوصول للحل بعد {iterations} خطوة</div></div>", unsafe_allow_html=True)
             
-            st.session_state.history.append(f"🎯 **جذر:** `{func_input}`\n\n**النتيجة:** `{root:.5f}`")
+            st.session_state.history.append(f"🎯 **جذر:** `{func_input}`\n\n**النتيجة:** `{root:.{dp}f}`")
 
-            # عرض جدول الخطوات (التحديث المطلوب من الريكورد)
+            # --- عرض الجدول وزر التحميل ---
             st.markdown("### 📝 جدول خطوات الحل (Iterations Table)")
-            df_steps = pd.DataFrame(steps_data)
-            st.dataframe(df_steps, use_container_width=True, hide_index=True)
+            if len(steps_data) > 0:
+                df_steps = pd.DataFrame(steps_data)
+                st.dataframe(df_steps, use_container_width=True, hide_index=True)
+                
+                csv = df_steps.to_csv(index=False).encode('utf-8-sig') # لدعم اللغة العربية في إكسيل
+                st.download_button(
+                    label="📥 تحميل الجدول كملف إكسيل (CSV)",
+                    data=csv,
+                    file_name='iterations.csv',
+                    mime='text/csv',
+                    use_container_width=True
+                )
 
             st.markdown("### 🎨 الرسم البياني التفاعلي")
             x_min, x_max = root - 2, root + 2
-            if "Bisection" in method: x_min, x_max = min(a_val, root-1), max(b_val, root+1)
+            if method in ["طريقة التنصيف (Bisection)", "الوضع الخاطئ (False Position)"]: x_min, x_max = min(a_val, root-1), max(b_val, root+1)
             x_smooth = np.linspace(x_min, x_max, 500)
             y_smooth = f(x_smooth)
             if isinstance(y_smooth, (int, float)): y_smooth = np.full_like(x_smooth, y_smooth)
@@ -266,6 +329,12 @@ with col_display:
         # 🔵 تنفيذ كود التكامل (Integration)
         # ========================================================
         else:
+            # --- عرض القوانين الرياضية בـ LaTeX ---
+            st.markdown("### 📚 القوانين الرياضية (Numerical Methods):")
+            st.latex(r"\text{Trapezoidal: } \int_{a}^{b} f(x) dx \approx \frac{h}{2} \left[ f(x_0) + 2 \sum_{i=1}^{n-1} f(x_i) + f(x_n) \right]")
+            st.latex(r"\text{Simpson 1/3: } \int_{a}^{b} f(x) dx \approx \frac{h}{3} \left[ f(x_0) + 4 \sum_{i \text{ odd}} f(x_i) + 2 \sum_{i \text{ even}} f(x_i) + f(x_n) \right]")
+            st.latex(r"\text{Simpson 3/8: } \int_{a}^{b} f(x) dx \approx \frac{3h}{8} \left[ f(x_0) + 3 \sum_{i \neq 3k} f(x_i) + 2 \sum_{i = 3k} f(x_i) + f(x_n) \right]")
+
             if a_val >= b_val: st.error("❌ الحد الأقصى يجب أن يكون أكبر من الحد الأدنى."); st.stop()
             exact_val, _ = quad(f, a_val, b_val)
             
@@ -289,8 +358,8 @@ with col_display:
                 for i in range(1, n): integral += 2 * y_vals[i] if i % 3 == 0 else 3 * y_vals[i]
                 simp38_val = (3 * h / 8) * integral
 
-            st.markdown(f"<div class='result-card exact-card'><div class='card-title'>🎯 القيمة الدقيقة التحليلية (Exact Integration)</div><div class='card-value exact-value'>{exact_val:.8f}</div></div>", unsafe_allow_html=True)
-            st.session_state.history.append(f"📈 **تكامل:** `{func_input}`\n\n**من:** `{a_val}` **إلى:** `{b_val}`\n\n**النتيجة:** `{exact_val:.5f}`")
+            st.markdown(f"<div class='result-card exact-card'><div class='card-title'>🎯 القيمة الدقيقة التحليلية (Exact Integration)</div><div class='card-value exact-value'>{exact_val:.{dp}f}</div></div>", unsafe_allow_html=True)
+            st.session_state.history.append(f"📈 **تكامل:** `{func_input}`\n\n**من:** `{a_val}` **إلى:** `{b_val}`\n\n**النتيجة:** `{exact_val:.{dp}f}`")
 
             st.markdown("### ⚖️ مقارنة طرق التكامل")
             df_data = []
@@ -302,7 +371,7 @@ with col_display:
             for m_name, m_val in methods_list:
                 if m_val is not None:
                     err = abs(exact_val - m_val)
-                    df_data.append({"الطريقة": m_name, "النتيجة التقريبية": f"{m_val:.6f}", "الخطأ المطلق": f"{err:.2e}"})
+                    df_data.append({"الطريقة": m_name, "النتيجة التقريبية": f"{m_val:.{dp}f}", "الخطأ المطلق": f"{err:.2e}"})
                 else:
                     reason = "يتطلب n زوجي" if "1/3" in m_name else "يتطلب n مضاعف لـ 3"
                     df_data.append({"الطريقة": m_name, "النتيجة التقريبية": f"❌ {reason}", "الخطأ المطلق": "-"})
