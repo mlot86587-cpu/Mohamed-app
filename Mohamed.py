@@ -52,19 +52,15 @@ st.sidebar.selectbox("💡 أمثلة سريعة للتدريب:",
 # --- 🕒 تصميم سجل العمليات ---
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🕒 سجل العمليات (History)")
-
-# زر مسح السجل
 if st.sidebar.button("🗑️ مسح السجل", use_container_width=True):
     st.session_state.history = []
     st.rerun()
 
-# عرض محتويات السجل (الأحدث فوق)
 if not st.session_state.history:
     st.sidebar.info("السجل فارغ. ابدأ الحساب الآن!")
 else:
     for item in reversed(st.session_state.history):
         st.sidebar.success(item)
-
 
 # === تقسيم الشاشة الأساسي ===
 col_control, col_display = st.columns([1, 2.5])
@@ -129,6 +125,7 @@ with col_control:
             with col1: a_str = st.text_input("من (a):", value="0")
             with col2: b_str = st.text_input("إلى (b):", value="2")
         else:
+            # كما طلب في الريكورد: إدخال قيمة x0 المبدئية
             a_str = st.text_input("نقطة التخمين المبدئية (x0):", value="1")
             b_str = "0"
         tol_str = st.text_input("نسبة الخطأ المقبولة (Tolerance):", value="1e-6")
@@ -174,10 +171,12 @@ with col_display:
             st.stop()
 
         # ========================================================
-        # 🟢 تنفيذ كود حل المعادلات
+        # 🟢 تنفيذ كود حل المعادلات (مع إضافة جدول الخطوات)
         # ========================================================
         if "Root" in app_mode:
             root, iterations, error = None, 0, 0
+            steps_data = [] # مصفوفة لحفظ خطوات الحل لعرضها في جدول
+            
             if "Bisection" in method:
                 if a_val >= b_val: st.error("❌ النقطة (b) يجب أن تكون أكبر من (a)."); st.stop()
                 fa, fb = f(a_val), f(b_val)
@@ -187,36 +186,67 @@ with col_display:
                 for i in range(100):
                     c = (a_temp + b_temp) / 2.0
                     fc = f(c)
-                    if abs(fc) < tol_val or (b_temp - a_temp) / 2.0 < tol_val:
+                    current_error = (b_temp - a_temp) / 2.0
+                    
+                    # حفظ بيانات الخطوة
+                    steps_data.append({
+                        "Iteration": i + 1,
+                        "a": f"{a_temp:.6f}",
+                        "b": f"{b_temp:.6f}",
+                        "c (Midpoint)": f"{c:.6f}",
+                        "f(c)": f"{fc:.6f}",
+                        "Error": f"{current_error:.2e}"
+                    })
+                    
+                    if abs(fc) < tol_val or current_error < tol_val:
                         root, iterations, error = c, i+1, abs(fc)
                         break
+                        
                     if fa * fc < 0: b_temp = c
                     else: a_temp, fa = c, fc
                 if root is None: root, iterations, error = c, 100, abs(fc)
+
             else:
+                # طريقة نيوتن كما طُلِب في الريكورد
                 try:
                     df_expr = sp.diff(f_expr, x)
                     df = sp.lambdify(x, df_expr, "numpy")
                 except Exception: st.error("❌ فشل في حساب اشتقاق الدالة."); st.stop()
                 
-                x_curr = a_val
+                x_curr = a_val # x0 اللي اليوزر بيدخلها
                 for i in range(100):
                     fx, dfx = f(x_curr), df(x_curr)
                     if dfx == 0: st.error("❌ المشتقة تساوي صفر، طريقة نيوتن تفشل هنا."); st.stop()
+                    
                     x_next = x_curr - fx / dfx
-                    if abs(x_next - x_curr) < tol_val:
+                    current_error = abs(x_next - x_curr)
+                    
+                    # حفظ بيانات كل محاولة (x1, x2, x3...)
+                    steps_data.append({
+                        "Iteration (i)": i + 1,
+                        "X_i": f"{x_curr:.6f}",
+                        "f(X_i)": f"{fx:.6f}",
+                        "f'(X_i)": f"{dfx:.6f}",
+                        "X_i+1": f"{x_next:.6f}",
+                        "Error": f"{current_error:.2e}"
+                    })
+                    
+                    if current_error < tol_val:
                         root, iterations, error = x_next, i+1, abs(f(x_next))
                         break
                     x_curr = x_next
                 if root is None: root, iterations, error = x_curr, 100, abs(f(x_curr))
 
             res_col1, res_col2 = st.columns(2)
-            with res_col1: st.markdown(f"<div class='result-card exact-card'><div class='card-title'>📍 قيمة الجذر (Root)</div><div class='card-value exact-value'>{root:.6f}</div></div>", unsafe_allow_html=True)
+            with res_col1: st.markdown(f"<div class='result-card exact-card'><div class='card-title'>📍 قيمة الجذر النهائي (Root)</div><div class='card-value exact-value'>{root:.6f}</div></div>", unsafe_allow_html=True)
             with res_col2: st.markdown(f"<div class='result-card'><div class='card-title'>⚙️ الأداء (Performance)</div><div class='card-value' style='font-size:22px;'>الخطأ: {error:.2e}</div><div class='card-subtext'>تم الوصول للحل بعد {iterations} خطوة</div></div>", unsafe_allow_html=True)
             
-            # 💡 حفظ العملية في السجل
-            history_str = f"🎯 **جذر:** `{func_input}`\n\n**النتيجة:** `{root:.5f}`"
-            st.session_state.history.append(history_str)
+            st.session_state.history.append(f"🎯 **جذر:** `{func_input}`\n\n**النتيجة:** `{root:.5f}`")
+
+            # عرض جدول الخطوات (التحديث المطلوب من الريكورد)
+            st.markdown("### 📝 جدول خطوات الحل (Iterations Table)")
+            df_steps = pd.DataFrame(steps_data)
+            st.dataframe(df_steps, use_container_width=True, hide_index=True)
 
             st.markdown("### 🎨 الرسم البياني التفاعلي")
             x_min, x_max = root - 2, root + 2
@@ -260,10 +290,7 @@ with col_display:
                 simp38_val = (3 * h / 8) * integral
 
             st.markdown(f"<div class='result-card exact-card'><div class='card-title'>🎯 القيمة الدقيقة التحليلية (Exact Integration)</div><div class='card-value exact-value'>{exact_val:.8f}</div></div>", unsafe_allow_html=True)
-            
-            # 💡 حفظ العملية في السجل
-            history_str = f"📈 **تكامل:** `{func_input}`\n\n**من:** `{a_val}` **إلى:** `{b_val}`\n\n**النتيجة:** `{exact_val:.5f}`"
-            st.session_state.history.append(history_str)
+            st.session_state.history.append(f"📈 **تكامل:** `{func_input}`\n\n**من:** `{a_val}` **إلى:** `{b_val}`\n\n**النتيجة:** `{exact_val:.5f}`")
 
             st.markdown("### ⚖️ مقارنة طرق التكامل")
             df_data = []
