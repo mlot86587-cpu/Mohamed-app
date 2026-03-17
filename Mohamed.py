@@ -45,7 +45,7 @@ st.sidebar.title("🧮 الأقسام الرياضية")
 app_mode = st.sidebar.radio("اختر العملية المطلوبة:", [
     "📈 التكامل العددي (Integration)", 
     "🎯 حل المعادلات (Root Finding)",
-    "🧮 أنظمة المعادلات الخطية (Linear Systems)" # القسم الجديد
+    "🧮 أنظمة المعادلات الخطية (Linear Systems)"
 ])
 st.sidebar.markdown("---")
 
@@ -81,15 +81,15 @@ with col_control:
     st.markdown(f"### 🎛️ إعدادات {app_mode.split(' ')[1]}")
     
     # -----------------------------------------------------
-    # 1. إعدادات قسم أنظمة المعادلات الخطية (الجديد)
+    # 1. إعدادات قسم أنظمة المعادلات الخطية
     # -----------------------------------------------------
     if "Linear" in app_mode:
-        st.info("قم بإدخال معاملات المصفوفة والثوابت في الجدول أدناه.")
+        st.info("💡 نصيحة: يمكنك نسخ المصفوفة من Excel ولصقها مباشرة في الجدول أدناه (Ctrl+V).")
         method = st.selectbox("اختر طريقة الحل:", ["جاكوبي (Jacobi)", "جاوس-سيدل (Gauss-Seidel)"])
         
-        n_vars = st.number_input("عدد المتغيرات (المعادلات):", min_value=2, max_value=10, value=3)
+        # 🚀 التعديل هنا: رفع الحد الأقصى لـ 50
+        n_vars = st.number_input("عدد المتغيرات (المعادلات):", min_value=2, max_value=50, value=3)
         
-        # إنشاء مصفوفة افتراضية مسيطرة قطرياً (Diagonally Dominant) عشان متعملش Divergence
         default_matrix = np.zeros((n_vars, n_vars + 1))
         if n_vars == 3:
             default_matrix = np.array([[5, -1, 1, 10], [2, 8, -1, 11], [-1, 1, 4, 3]], dtype=float)
@@ -97,7 +97,7 @@ with col_control:
         cols = [f"x{i+1}" for i in range(n_vars)] + ["= b"]
         df_matrix = pd.DataFrame(default_matrix, columns=cols)
         
-        st.markdown("**المصفوفة الموسعة $[A | b]$:**")
+        st.markdown(f"**المصفوفة الموسعة $[A | b]$ بحجم ({n_vars}×{n_vars+1}):**")
         edited_df = st.data_editor(df_matrix, use_container_width=True, hide_index=True)
         
         tol_str = st.text_input("نسبة الخطأ المقبولة (Tolerance):", value="1e-6")
@@ -185,7 +185,7 @@ with col_display:
     if calc_btn:
         
         # ========================================================
-        # 🟢 1. تنفيذ كود أنظمة المعادلات (الجديد)
+        # 🟢 1. تنفيذ كود أنظمة المعادلات (الخطي)
         # ========================================================
         if "Linear" in app_mode:
             try:
@@ -195,12 +195,10 @@ with col_display:
                 st.error("❌ تأكد من كتابة نسبة الخطأ بشكل صحيح.")
                 st.stop()
                 
-            # سحب المصفوفات من الجدول
             A = edited_df.iloc[:, :-1].values.astype(float)
             b = edited_df.iloc[:, -1].values.astype(float)
             n = len(b)
             
-            # التحقق من أصفار القطر الرئيسي
             if np.any(np.diag(A) == 0):
                 st.error("❌ يوجد أصفار على القطر الرئيسي (Main Diagonal). يرجى إعادة ترتيب المعادلات لتجنب القسمة على صفر.")
                 st.stop()
@@ -211,11 +209,11 @@ with col_display:
             else:
                 st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j < i} a_{ij} x_j^{(k+1)} - \sum_{j > i} a_{ij} x_j^{(k)} \right)")
 
-            x = np.zeros(n) # التخمين المبدئي بأصفار
+            x = np.zeros(n)
             steps_data = []
             iterations = 0
             final_error = 0
-            max_iter = 100
+            max_iter = 500 # زيادة عدد المحاولات عشان المصفوفات الكبيرة
             
             for it in range(max_iter):
                 x_new = np.zeros(n)
@@ -223,45 +221,37 @@ with col_display:
                     s = 0
                     for j in range(n):
                         if i != j:
-                            if "Jacobi" in method:
-                                s += A[i, j] * x[j]
-                            else: # Gauss-Seidel
-                                s += A[i, j] * (x_new[j] if j < i else x[j])
+                            if "Jacobi" in method: s += A[i, j] * x[j]
+                            else: s += A[i, j] * (x_new[j] if j < i else x[j])
                     x_new[i] = (b[i] - s) / A[i, i]
                 
-                # حساب نسبة الخطأ (أقصى فرق بين القديم والجديد)
                 error = np.max(np.abs(x_new - x))
                 
-                # تخزين الخطوة في الجدول
                 step_dict = {"Iteration": it + 1}
-                for i in range(n):
-                    step_dict[f"x{i+1}"] = f"{x_new[i]:.{dp}f}"
+                for i in range(n): step_dict[f"x{i+1}"] = f"{x_new[i]:.{dp}f}"
                 step_dict["Error"] = f"{error:.2e}"
                 steps_data.append(step_dict)
                 
                 iterations = it + 1
                 final_error = error
                 
-                if error < tol_val:
-                    break
+                if error < tol_val: break
                 x = x_new.copy()
 
             if iterations == max_iter:
-                st.warning("⚠️ وصل البرنامج للحد الأقصى من المحاولات (100) وقد لا يكون الحل تقارب (Diverged). تأكد أن المصفوفة مسيطرة قطرياً (Diagonally Dominant).")
+                st.warning("⚠️ وصل البرنامج للحد الأقصى من المحاولات وقد لا يكون الحل تقارب (Diverged). تأكد أن المصفوفة مسيطرة قطرياً.")
 
-            # عرض النتيجة النهائية
+            # 🚀 التعديل هنا: عرض النتائج النهائية في جدول لتناسب الـ 50 متغير
             st.markdown("### 📍 قيم المتغيرات النهائية")
-            cols_res = st.columns(n)
-            for i in range(n):
-                with cols_res[i]:
-                    st.markdown(f"<div class='result-card exact-card'><div class='card-title'>المتغير $x_{i+1}$</div><div class='card-value exact-value'>{x_new[i]:.{dp}f}</div></div>", unsafe_allow_html=True)
+            res_df = pd.DataFrame({
+                "المتغير": [f"x{i+1}" for i in range(n)],
+                "القيمة النهائية": [f"{x_new[i]:.{dp}f}" for i in range(n)]
+            })
+            st.dataframe(res_df, use_container_width=True)
             
             st.info(f"تم الوصول للحل بعد **{iterations} خطوة** | أقصى خطأ: **{final_error:.2e}**")
-            
-            # تسجيل في السجل
             st.session_state.history.append(f"🧮 **نظام خطي ({method.split(' ')[0]}):**\nالمتغيرات: `{n}`\nالخطوات: `{iterations}`")
 
-            # عرض الجدول وزر التحميل
             st.markdown("### 📝 جدول خطوات الحل (Iterations Table)")
             df_steps = pd.DataFrame(steps_data)
             st.dataframe(df_steps, use_container_width=True, hide_index=True)
