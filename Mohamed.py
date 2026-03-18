@@ -84,15 +84,20 @@ with col_control:
     # 1. إعدادات قسم أنظمة المعادلات الخطية
     # -----------------------------------------------------
     if "Linear" in app_mode:
-        st.info("💡 نصيحة: يمكنك نسخ المصفوفة من Excel ولصقها مباشرة في الجدول أدناه (Ctrl+V).")
+        st.info("💡 اكتب المعادلات بأي ترتيب عشوائي، والبرنامج سيقوم بترتيبها أوتوماتيكياً لتكون مسيطرة قطرياً.")
         method = st.selectbox("اختر طريقة الحل:", ["جاكوبي (Jacobi)", "جاوس-سيدل (Gauss-Seidel)"])
         
-        # 🚀 التعديل هنا: رفع الحد الأقصى لـ 50
         n_vars = st.number_input("عدد المتغيرات (المعادلات):", min_value=2, max_value=50, value=3)
         
+        # وضع مصفوفة افتراضية "غير مرتبة" عشان اليوزر يجرب السحر
         default_matrix = np.zeros((n_vars, n_vars + 1))
         if n_vars == 3:
-            default_matrix = np.array([[5, -1, 1, 10], [2, 8, -1, 11], [-1, 1, 4, 3]], dtype=float)
+            # مصفوفة متلخبطة عمداً لتجربة خوارزمية الترتيب
+            default_matrix = np.array([
+                [2, 8, -1, 11], 
+                [-1, 1, 4, 3], 
+                [5, -1, 1, 10]
+            ], dtype=float)
             
         cols = [f"x{i+1}" for i in range(n_vars)] + ["= b"]
         df_matrix = pd.DataFrame(default_matrix, columns=cols)
@@ -195,13 +200,49 @@ with col_display:
                 st.error("❌ تأكد من كتابة نسبة الخطأ بشكل صحيح.")
                 st.stop()
                 
-            A = edited_df.iloc[:, :-1].values.astype(float)
-            b = edited_df.iloc[:, -1].values.astype(float)
-            n = len(b)
+            A_input = edited_df.iloc[:, :-1].values.astype(float)
+            b_input = edited_df.iloc[:, -1].values.astype(float)
+            n = len(b_input)
             
+            # 🚀 السحر يبدأ هنا: خوارزمية الترتيب الأوتوماتيكي (Partial Pivoting)
+            indices = []
+            used_rows = set()
+            for i in range(n):
+                max_row = -1
+                max_val = -1
+                for r in range(n):
+                    if r not in used_rows:
+                        if abs(A_input[r, i]) > max_val:
+                            max_val = abs(A_input[r, i])
+                            max_row = r
+                indices.append(max_row)
+                used_rows.add(max_row)
+
+            A = A_input[indices]
+            b = b_input[indices]
+
+            # عرض رسالة لو البرنامج رتبهم
+            if indices != list(range(n)):
+                st.success("✨ تم إعادة ترتيب المعادلات أوتوماتيكياً (Diagonally Dominant) لضمان الوصول للحل!")
+                sorted_df = pd.DataFrame(np.column_stack((A, b)), columns=cols)
+                with st.expander("👀 اضغط هنا لرؤية المعادلات بعد الترتيب", expanded=False):
+                    st.dataframe(sorted_df, use_container_width=True)
+
+            # التحقق من أصفار القطر الرئيسي بعد الترتيب
             if np.any(np.diag(A) == 0):
-                st.error("❌ يوجد أصفار على القطر الرئيسي (Main Diagonal). يرجى إعادة ترتيب المعادلات لتجنب القسمة على صفر.")
+                st.error("❌ يوجد صفر على القطر الرئيسي حتى بعد الترتيب. النظام قد لا يكون له حل وحيد.")
                 st.stop()
+                
+            # التحقق: هل هي مسيطرة قطرياً فعلاً؟
+            is_dd = True
+            for i in range(n):
+                sum_others = np.sum(np.abs(A[i])) - abs(A[i, i])
+                if abs(A[i, i]) < sum_others:
+                    is_dd = False
+                    break
+                    
+            if not is_dd:
+                st.warning("⚠️ تحذير: المصفوفة الناتجة ليست مسيطرة قطرياً بشكل كامل. قد لا تصل الطريقة للحل (Divergence) ولكن سنحاول.")
 
             st.markdown("### 📚 القانون الرياضي المستخدم:")
             if "Jacobi" in method:
@@ -213,7 +254,7 @@ with col_display:
             steps_data = []
             iterations = 0
             final_error = 0
-            max_iter = 500 # زيادة عدد المحاولات عشان المصفوفات الكبيرة
+            max_iter = 500
             
             for it in range(max_iter):
                 x_new = np.zeros(n)
@@ -236,12 +277,17 @@ with col_display:
                 final_error = error
                 
                 if error < tol_val: break
+                
+                # إيقاف مبكر لو الأرقام ضربت للمالانهاية (Divergence)
+                if error > 1e10:
+                    break
+                    
                 x = x_new.copy()
 
-            if iterations == max_iter:
-                st.warning("⚠️ وصل البرنامج للحد الأقصى من المحاولات وقد لا يكون الحل تقارب (Diverged). تأكد أن المصفوفة مسيطرة قطرياً.")
+            if iterations == max_iter or final_error > 1e10:
+                st.error("❌ الطريقة فشلت في الوصول لحل (Diverged). الأرقام تتباعد عن الحل الصحيح.")
 
-            # 🚀 التعديل هنا: عرض النتائج النهائية في جدول لتناسب الـ 50 متغير
+            # عرض النتيجة النهائية
             st.markdown("### 📍 قيم المتغيرات النهائية")
             res_df = pd.DataFrame({
                 "المتغير": [f"x{i+1}" for i in range(n)],
@@ -249,7 +295,7 @@ with col_display:
             })
             st.dataframe(res_df, use_container_width=True)
             
-            st.info(f"تم الوصول للحل بعد **{iterations} خطوة** | أقصى خطأ: **{final_error:.2e}**")
+            st.info(f"تمت الحسابات في **{iterations} خطوة** | أقصى خطأ: **{final_error:.2e}**")
             st.session_state.history.append(f"🧮 **نظام خطي ({method.split(' ')[0]}):**\nالمتغيرات: `{n}`\nالخطوات: `{iterations}`")
 
             st.markdown("### 📝 جدول خطوات الحل (Iterations Table)")
