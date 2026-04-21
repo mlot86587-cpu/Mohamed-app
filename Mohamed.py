@@ -99,7 +99,7 @@ dp = st.sidebar.slider(
     min_value=2, max_value=10, value=6
 )
 show_tutorial = st.sidebar.toggle(
-    "👀 وضع الشرح (إظهار تعويض الخطوة الأولى)", 
+    "👀 وضع الشرح (إظهار التعويض)", 
     value=False
 )
 
@@ -132,10 +132,15 @@ with col_control:
         method = st.selectbox("طريقة الاستيفاء:", ["لاجرانج (Lagrange)"])
         num_pts = st.number_input("عدد النقاط (n):", min_value=2, max_value=10, value=3)
         st.write("أدخل قيم X و Y:")
-        df_pts = pd.DataFrame({
-            "X": np.arange(num_pts, dtype=float), 
-            "Y": np.random.randint(1, 10, num_pts).astype(float)
-        })
+        
+        # قائمة مبسطة لتفادي أخطاء النسخ
+        x_init = []
+        y_init = []
+        for i in range(num_pts):
+            x_init.append(float(i))
+            y_init.append(float(np.random.randint(1, 10)))
+            
+        df_pts = pd.DataFrame({"X": x_init, "Y": y_init})
         edited_pts = st.data_editor(df_pts, use_container_width=True, hide_index=True)
         
     # -----------------------------------------------------
@@ -147,7 +152,7 @@ with col_control:
             ["جاكوبي (Jacobi)", "جاوس-سيدل (Gauss-Seidel)", "الحذف لجاوس (Gaussian Elimination)"]
         )
         n_vars = st.number_input(
-            "عدد المتغيرات (المعادلات):", 
+            "عدد المتغيرات:", 
             min_value=2, max_value=10, value=3
         )
         
@@ -159,10 +164,15 @@ with col_control:
                 [5, -1, 1, 10]
             ], dtype=float)
             
-        cols = [f"x{i+1}" for i in range(n_vars)] + ["= b"]
+        # بناء أسماء الأعمدة بطريقة آمنة
+        cols = []
+        for i in range(n_vars):
+            cols.append(f"x{i+1}")
+        cols.append("= b")
+        
         df_matrix = pd.DataFrame(default_matrix, columns=cols)
         
-        st.markdown(f"**المصفوفة الموسعة $[A | b]$:**")
+        st.markdown(f"**المصفوفة الموسعة:**")
         edited_df = st.data_editor(df_matrix, use_container_width=True, hide_index=True)
         
         if "Gauss" not in method or "Seidel" in method:
@@ -322,7 +332,7 @@ with col_display:
             poly = 0
             
             if "Lagrange" in method:
-                st.markdown("### 📚 القانون الرياضي (Lagrange Polynomial):")
+                st.markdown("### 📚 القانون الرياضي (Lagrange):")
                 st.latex(r"P(x) = \sum_{i=0}^{n} y_i \prod_{j \neq i} \frac{x - x_j}{x_i - x_j}")
                 
                 for i in range(len(x_vals)):
@@ -342,7 +352,7 @@ with col_display:
             st.info(f"**P(x) =** {poly_simplified}")
             
             if show_tutorial:
-                msg = "<b>💡 توضيح:</b> تم حساب حدود لاجرانج وجمعها للوصول للمعادلة."
+                msg = "<b>💡 توضيح:</b> تم حساب حدود لاجرانج وجمعها."
                 html = f"<div class='result-card tutorial-card'>{msg}</div>"
                 st.markdown(html, unsafe_allow_html=True)
 
@@ -357,13 +367,12 @@ with col_display:
             ))
             fig.add_trace(go.Scatter(
                 x=x_curve, y=y_curve, mode='lines', 
-                name='المنحنى المستنتج', line=dict(color='#007bff', width=2)
+                name='المنحنى', line=dict(color='#007bff', width=2)
             ))
             fig.update_layout(title="منحنى الاستيفاء", template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
             
-            hist_msg = f"📉 **استيفاء:** تم استنتاج المعادلة لـ {len(x_vals)} نقاط."
-            st.session_state.history.append(hist_msg)
+            st.session_state.history.append("📉 **استيفاء:** تم الحساب.")
 
         # ==================================
         # 2. الأنظمة الخطية (Linear Systems)
@@ -378,11 +387,11 @@ with col_display:
                     tol_clean = tol_str.replace(' ', '')
                     tol_val = float(sp.sympify(tol_clean, locals={'e': sp.E}))
             except Exception:
-                st.error("❌ تأكد من كتابة الأرقام بشكل صحيح.")
+                st.error("❌ تأكد من الأرقام.")
                 st.stop()
                 
             if "Elimination" in method:
-                st.markdown("### 📚 طريقة الحذف لجاوس (Gaussian Elimination)")
+                st.markdown("### 📚 طريقة الحذف لجاوس")
                 Ab = np.column_stack((A_input, b_input))
                 
                 for i in range(n):
@@ -390,7 +399,7 @@ with col_display:
                     Ab[[i, max_row]] = Ab[[max_row, i]]
                     
                     if Ab[i, i] == 0:
-                        st.error("❌ المصفوفة شاذة (Singular). لا يوجد حل وحيد.")
+                        st.error("❌ المصفوفة شاذة.")
                         st.stop()
                         
                     for j in range(i+1, n):
@@ -401,14 +410,23 @@ with col_display:
                 for i in range(n-1, -1, -1):
                     x_res[i] = (Ab[i, -1] - np.sum(Ab[i, i+1:n] * x_res[i+1:n])) / Ab[i, i]
                     
-                st.markdown("### 📍 قيم المتغيرات النهائية (الحل المباشر)")
+                st.markdown("### 📍 النتائج")
                 
+                # --- التعديل الآمن لإنشاء الجداول ---
+                var_names = []
+                var_vals = []
+                for i in range(n):
+                    var_names.append(f"x{i+1}")
+                    var_vals.append(f"{x_res[i]:.{dp}f}")
+                    
                 res_df = pd.DataFrame({
-                    "المتغير": [f"x{i+1}" for i in range(n)], 
-                    "القيمة الدقيقة": [f"{x_res[i]:.{dp}f}" for i in range(n)]
+                    "المتغير": var_names, 
+                    "القيمة الدقيقة": var_vals
                 })
+                # ----------------------------------
+                
                 st.dataframe(res_df, use_container_width=True)
-                st.session_state.history.append("🧮 **نظام خطي (جاوس):** تم الحل بنجاح.")
+                st.session_state.history.append("🧮 **جاوس:** تم الحل.")
                 
             else:
                 indices = []
@@ -425,18 +443,21 @@ with col_display:
 
                 A, b = A_input[indices], b_input[indices]
                 if indices != list(range(n)): 
-                    st.success("✨ تم إعادة ترتيب المعادلات لضمان الحل (Pivoting)!")
+                    st.success("✨ تم الترتيب (Pivoting)!")
                 if np.any(np.diag(A) == 0): 
-                    st.error("❌ يوجد صفر على القطر الرئيسي."); st.stop()
+                    st.error("❌ القطر يحتوي على أصفار."); st.stop()
 
-                st.markdown("### 📚 القانون الرياضي المستخدم:")
+                st.markdown("### 📚 القانون المستخدم:")
                 if "Jacobi" in method: 
                     st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j \neq i} a_{ij} x_j^{(k)} \right)")
                 else: 
                     st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j < i} a_{ij} x_j^{(k+1)} - \sum_{j > i} a_{ij} x_j^{(k)} \right)")
 
                 x_arr = np.zeros(n)
-                steps_data, iterations, final_error, max_iter = [], 0, 0, 500
+                steps_data = []
+                iterations = 0
+                final_error = 0
+                max_iter = 500
                 
                 for it in range(max_iter):
                     x_new = np.zeros(n)
@@ -451,25 +472,20 @@ with col_display:
                         x_new[i] = (b[i] - s) / A[i, i]
                         
                         if show_tutorial and it == 0 and i == 0:
-                            msg = f"<b>💡 تعويض الخطوة 1 للمتغير x1:</b><br> x1 = ( {b[i]} - المجموع ) / {A[i,i]} = {x_new[i]:.{dp}f}"
+                            msg = f"<b>💡 تعويض:</b><br> x1 = ( {b[i]} - المجموع ) / {A[i,i]} = {x_new[i]:.{dp}f}"
                             html = f"<div class='result-card tutorial-card'>{msg}</div>"
                             st.markdown(html, unsafe_allow_html=True)
                     
                     error = np.max(np.abs(x_new - x_arr))
+                    
                     step_dict = {"Iteration": it + 1}
                     for i in range(n): 
                         step_dict[f"x{i+1}"] = f"{x_new[i]:.{dp}f}"
                     step_dict["Error"] = f"{error:.2e}"
                     steps_data.append(step_dict)
                     
-                    iterations, final_error = it + 1, error
+                    iterations = it + 1
+                    final_error = error
                     if error < tol_val: break
                     if error > 1e10: break
-                    x_arr = x_new.copy()
-
-                if iterations == max_iter or final_error > 1e10: 
-                    st.error("❌ الطريقة فشلت في الوصول لحل (Diverged).")
-                    
-                st.markdown("### 📍 قيم المتغيرات النهائية")
-                res_df = pd.DataFrame({
-                    "المتغير": [f"x{i+1}"
+                    x_arr = x_new.
