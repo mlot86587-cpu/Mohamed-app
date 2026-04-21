@@ -37,8 +37,10 @@ if 'history' not in st.session_state:
 
 def append_to_func(text): 
     st.session_state.func_text += text
+
 def clear_func(): 
     st.session_state.func_text = ""
+
 def backspace_func(): 
     st.session_state.func_text = st.session_state.func_text[:-1]
 
@@ -170,7 +172,7 @@ with col_control:
         
         df_matrix = pd.DataFrame(default_matrix, columns=cols)
         
-        st.markdown(f"**المصفوفة الموسعة:**")
+        st.markdown("**المصفوفة الموسعة:**")
         edited_df = st.data_editor(df_matrix, use_container_width=True, hide_index=True)
         
         if "Gauss" not in method or "Seidel" in method:
@@ -428,7 +430,8 @@ with col_display:
                 indices = []
                 used_rows = set()
                 for i in range(n):
-                    max_row, max_val = -1, -1
+                    max_row = -1
+                    max_val = -1
                     for r in range(n):
                         if r not in used_rows:
                             if abs(A_input[r, i]) > max_val:
@@ -437,11 +440,14 @@ with col_display:
                     indices.append(max_row)
                     used_rows.add(max_row)
 
-                A, b = A_input[indices], b_input[indices]
+                A = A_input[indices]
+                b = b_input[indices]
+                
                 if indices != list(range(n)): 
                     st.success("✨ تم الترتيب (Pivoting)!")
                 if np.any(np.diag(A) == 0): 
-                    st.error("❌ القطر يحتوي على أصفار."); st.stop()
+                    st.error("❌ القطر يحتوي على أصفار.")
+                    st.stop()
 
                 st.markdown("### 📚 القانون المستخدم:")
                 if "Jacobi" in method: 
@@ -482,11 +488,12 @@ with col_display:
                     
                     iterations = it + 1
                     final_error = error
-                    if error < tol_val: break
-                    if error > 1e10: break
                     
-                    # --- هذا هو السطر الذي كان ينقطع في رسائل الواتساب ---
+                    if error < tol_val: 
+                        break
+                    if error > 1e10: 
+                        break
+                        
                     x_arr = x_new.copy()
 
-                if iterations == max_iter or final_error > 1e10: 
-                   
+             
