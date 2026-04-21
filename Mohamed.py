@@ -133,7 +133,6 @@ with col_control:
         num_pts = st.number_input("عدد النقاط (n):", min_value=2, max_value=10, value=3)
         st.write("أدخل قيم X و Y:")
         
-        # قائمة مبسطة لتفادي أخطاء النسخ
         x_init = []
         y_init = []
         for i in range(num_pts):
@@ -164,7 +163,6 @@ with col_control:
                 [5, -1, 1, 10]
             ], dtype=float)
             
-        # بناء أسماء الأعمدة بطريقة آمنة
         cols = []
         for i in range(n_vars):
             cols.append(f"x{i+1}")
@@ -412,7 +410,6 @@ with col_display:
                     
                 st.markdown("### 📍 النتائج")
                 
-                # --- التعديل الآمن لإنشاء الجداول ---
                 var_names = []
                 var_vals = []
                 for i in range(n):
@@ -423,7 +420,6 @@ with col_display:
                     "المتغير": var_names, 
                     "القيمة الدقيقة": var_vals
                 })
-                # ----------------------------------
                 
                 st.dataframe(res_df, use_container_width=True)
                 st.session_state.history.append("🧮 **جاوس:** تم الحل.")
@@ -488,4 +484,9 @@ with col_display:
                     final_error = error
                     if error < tol_val: break
                     if error > 1e10: break
-                    x_arr = x_new.
+                    
+                    # --- هذا هو السطر الذي كان ينقطع في رسائل الواتساب ---
+                    x_arr = x_new.copy()
+
+                if iterations == max_iter or final_error > 1e10: 
+                   
