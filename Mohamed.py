@@ -24,13 +24,19 @@ div[data-testid="column"] { padding: 0 3px !important; }
 """, unsafe_allow_html=True)
 
 # === إدارة حالة النص والسجل ===
-if 'func_text' not in st.session_state: st.session_state.func_text = ""
-if 'preset' not in st.session_state: st.session_state.preset = "اختر مثالاً..."
-if 'history' not in st.session_state: st.session_state.history = []
+if 'func_text' not in st.session_state: 
+    st.session_state.func_text = ""
+if 'preset' not in st.session_state: 
+    st.session_state.preset = "اختر مثالاً..."
+if 'history' not in st.session_state: 
+    st.session_state.history = []
 
-def append_to_func(text): st.session_state.func_text += text
-def clear_func(): st.session_state.func_text = ""
-def backspace_func(): st.session_state.func_text = st.session_state.func_text[:-1]
+def append_to_func(text): 
+    st.session_state.func_text += text
+def clear_func(): 
+    st.session_state.func_text = ""
+def backspace_func(): 
+    st.session_state.func_text = st.session_state.func_text[:-1]
 
 def apply_preset():
     p = st.session_state.preset
@@ -85,7 +91,7 @@ col_control, col_display = st.columns([1, 2.5])
 # ⚙️ العمود الأيسر: لوحة التحكم
 # ==========================================
 with col_control:
-    st.markdown(f"### 🎛️ إعدادات الإدخال")
+    st.markdown("### 🎛️ إعدادات الإدخال")
     
     # -----------------------------------------------------
     # 1. إعدادات الاستيفاء (Interpolation)
@@ -94,7 +100,10 @@ with col_control:
         method = st.selectbox("طريقة الاستيفاء:", ["لاجرانج (Lagrange)"])
         num_pts = st.number_input("عدد النقاط (n):", min_value=2, max_value=10, value=3)
         st.write("أدخل قيم X و Y:")
-        df_pts = pd.DataFrame({"X": np.arange(num_pts, dtype=float), "Y": np.random.randint(1, 10, num_pts).astype(float)})
+        df_pts = pd.DataFrame({
+            "X": np.arange(num_pts, dtype=float), 
+            "Y": np.random.randint(1, 10, num_pts).astype(float)
+        })
         edited_pts = st.data_editor(df_pts, use_container_width=True, hide_index=True)
         
     # -----------------------------------------------------
@@ -106,7 +115,11 @@ with col_control:
         
         default_matrix = np.zeros((n_vars, n_vars + 1))
         if n_vars == 3:
-            default_matrix = np.array([[2, 8, -1, 11], [-1, 1, 4, 3], [5, -1, 1, 10]], dtype=float)
+            default_matrix = np.array([
+                [2, 8, -1, 11], 
+                [-1, 1, 4, 3], 
+                [5, -1, 1, 10]
+            ], dtype=float)
             
         cols = [f"x{i+1}" for i in range(n_vars)] + ["= b"]
         df_matrix = pd.DataFrame(default_matrix, columns=cols)
@@ -133,30 +146,35 @@ with col_control:
             c3.button("tan", on_click=append_to_func, args=("tan(",))
             c4.button("π", on_click=append_to_func, args=("pi",))
             c5.button("🧹", on_click=clear_func, type="secondary")
+            
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("sin⁻¹", on_click=append_to_func, args=("asin(",))
             c2.button("cos⁻¹", on_click=append_to_func, args=("acos(",))
             c3.button("tan⁻¹", on_click=append_to_func, args=("atan(",))
             c4.button("e^( )", on_click=append_to_func, args=("exp(",))
             c5.button("√", on_click=append_to_func, args=("sqrt(",))
+            
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("7", on_click=append_to_func, args=("7",))
             c2.button("8", on_click=append_to_func, args=("8",))
             c3.button("9", on_click=append_to_func, args=("9",))
             c4.button("DEL", on_click=backspace_func)
             c5.button("x", on_click=append_to_func, args=("x",))
+            
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("4", on_click=append_to_func, args=("4",))
             c2.button("5", on_click=append_to_func, args=("5",))
             c3.button("6", on_click=append_to_func, args=("6",))
             c4.button("×", on_click=append_to_func, args=("*",))
             c5.button("÷", on_click=append_to_func, args=("/",))
+            
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("1", on_click=append_to_func, args=("1",))
             c2.button("2", on_click=append_to_func, args=("2",))
             c3.button("3", on_click=append_to_func, args=("3",))
             c4.button("+", on_click=append_to_func, args=("+",))
             c5.button("-", on_click=append_to_func, args=("-",))
+            
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("0", on_click=append_to_func, args=("0",))
             c2.button(".", on_click=append_to_func, args=(".",))
@@ -257,8 +275,8 @@ with col_display:
             y_curve = p_func(x_curve)
             
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='النقاط المُدخلة (Data Points)', marker=dict(color='red', size=12)))
-            fig.add_trace(go.Scatter(x=x_curve, y=y_curve, mode='lines', name='المنحنى المستنتج (Curve)', line=dict(color='#007bff', width=2)))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='النقاط المُدخلة', marker=dict(color='red', size=12)))
+            fig.add_trace(go.Scatter(x=x_curve, y=y_curve, mode='lines', name='المنحنى المستنتج', line=dict(color='#007bff', width=2)))
             fig.update_layout(title="منحنى الاستيفاء", template="plotly_white")
             st.plotly_chart(fig, use_container_width=True)
             
@@ -287,7 +305,6 @@ with col_display:
                 
                 # Forward Elimination مع Partial Pivoting
                 for i in range(n):
-                    # Pivoting
                     max_row = np.argmax(np.abs(Ab[i:n, i])) + i
                     Ab[[i, max_row]] = Ab[[max_row, i]]
                     
@@ -295,7 +312,6 @@ with col_display:
                         st.error("❌ المصفوفة شاذة (Singular). لا يوجد حل وحيد.")
                         st.stop()
                         
-                    # Elimination
                     for j in range(i+1, n):
                         factor = Ab[j, i] / Ab[i, i]
                         Ab[j] = Ab[j] - factor * Ab[i]
@@ -306,7 +322,10 @@ with col_display:
                     x_res[i] = (Ab[i, -1] - np.sum(Ab[i, i+1:n] * x_res[i+1:n])) / Ab[i, i]
                     
                 st.markdown("### 📍 قيم المتغيرات النهائية (الحل المباشر)")
-                res_df = pd.DataFrame({"المتغير": [f"x{i+1}" for i in range(n)], "القيمة الدقيقة": [f"{x_res[i]:.{dp}f}" for i in range(n)]})
+                res_df = pd.DataFrame({
+                    "المتغير": [f"x{i+1}" for i in range(n)], 
+                    "القيمة الدقيقة": [f"{x_res[i]:.{dp}f}" for i in range(n)]
+                })
                 st.dataframe(res_df, use_container_width=True)
                 st.session_state.history.append(f"🧮 **نظام خطي (جاوس المباشر):** تم الحل بنجاح.")
                 
@@ -325,12 +344,16 @@ with col_display:
                     used_rows.add(max_row)
 
                 A, b = A_input[indices], b_input[indices]
-                if indices != list(range(n)): st.success("✨ تم إعادة ترتيب المعادلات أوتوماتيكياً لضمان الوصول للحل (Pivoting)!")
-                if np.any(np.diag(A) == 0): st.error("❌ يوجد صفر على القطر الرئيسي حتى بعد الترتيب."); st.stop()
+                if indices != list(range(n)): 
+                    st.success("✨ تم إعادة ترتيب المعادلات أوتوماتيكياً لضمان الوصول للحل (Pivoting)!")
+                if np.any(np.diag(A) == 0): 
+                    st.error("❌ يوجد صفر على القطر الرئيسي حتى بعد الترتيب."); st.stop()
 
                 st.markdown("### 📚 القانون الرياضي المستخدم:")
-                if "Jacobi" in method: st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j \neq i} a_{ij} x_j^{(k)} \right)")
-                else: st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j < i} a_{ij} x_j^{(k+1)} - \sum_{j > i} a_{ij} x_j^{(k)} \right)")
+                if "Jacobi" in method: 
+                    st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j \neq i} a_{ij} x_j^{(k)} \right)")
+                else: 
+                    st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j < i} a_{ij} x_j^{(k+1)} - \sum_{j > i} a_{ij} x_j^{(k)} \right)")
 
                 x_arr = np.zeros(n)
                 steps_data, iterations, final_error, max_iter = [], 0, 0, 500
@@ -341,8 +364,10 @@ with col_display:
                         s = 0
                         for j in range(n):
                             if i != j:
-                                if "Jacobi" in method: s += A[i, j] * x_arr[j]
-                                else: s += A[i, j] * (x_new[j] if j < i else x_arr[j])
+                                if "Jacobi" in method: 
+                                    s += A[i, j] * x_arr[j]
+                                else: 
+                                    s += A[i, j] * (x_new[j] if j < i else x_arr[j])
                         x_new[i] = (b[i] - s) / A[i, i]
                         
                         # وضع الشرح
@@ -351,7 +376,8 @@ with col_display:
                     
                     error = np.max(np.abs(x_new - x_arr))
                     step_dict = {"Iteration": it + 1}
-                    for i in range(n): step_dict[f"x{i+1}"] = f"{x_new[i]:.{dp}f}"
+                    for i in range(n): 
+                        step_dict[f"x{i+1}"] = f"{x_new[i]:.{dp}f}"
                     step_dict["Error"] = f"{error:.2e}"
                     steps_data.append(step_dict)
                     
@@ -360,9 +386,13 @@ with col_display:
                     if error > 1e10: break
                     x_arr = x_new.copy()
 
-                if iterations == max_iter or final_error > 1e10: st.error("❌ الطريقة فشلت في الوصول لحل (Diverged).")
+                if iterations == max_iter or final_error > 1e10: 
+                    st.error("❌ الطريقة فشلت في الوصول لحل (Diverged).")
                 st.markdown("### 📍 قيم المتغيرات النهائية")
-                st.dataframe(pd.DataFrame({"المتغير": [f"x{i+1}" for i in range(n)], "القيمة النهائية": [f"{x_new[i]:.{dp}f}" for i in range(n)]}), use_container_width=True)
+                st.dataframe(pd.DataFrame({
+                    "المتغير": [f"x{i+1}" for i in range(n)], 
+                    "القيمة النهائية": [f"{x_new[i]:.{dp}f}" for i in range(n)]
+                }), use_container_width=True)
                 st.info(f"تمت الحسابات في **{iterations} خطوة** | أقصى خطأ: **{final_error:.2e}**")
                 st.markdown("### 📝 جدول خطوات الحل")
                 df_steps = pd.DataFrame(steps_data)
@@ -372,10 +402,4 @@ with col_display:
         # ==================================
         # 3. الأقسام المعتمدة على الدوال
         # ==================================
-        else:
-            if not func_input.strip(): st.warning("⚠️ يرجى تعبئة الدالة أولاً."); st.stop()
-            func_clean = func_input.replace('^', '**').replace('ln', 'log').replace(' ', '')
-            x = sp.Symbol('x')
-            y_sym = sp.Symbol('y')
-            custom_dict = {'e': sp.E}
-            if "Deg" in angle_mode: custom_dict.update({'sin': lambda arg: sp.sin(arg * sp.pi / 180), 'cos': lambda arg: sp.cos(arg * sp.pi / 1
+else:
