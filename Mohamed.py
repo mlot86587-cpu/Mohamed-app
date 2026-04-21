@@ -13,6 +13,7 @@ st.markdown("""
 <style>
 .result-card { background-color: var(--secondary-background-color); padding: 20px; border-radius: 15px; border-left: 5px solid #007bff; margin-bottom: 20px; }
 .exact-card { border-left: 5px solid #28a745; }
+.tutorial-card { border-left: 5px solid #ffc107; background-color: rgba(255, 193, 7, 0.1); }
 .card-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; opacity: 0.8; }
 .card-value { font-size: 28px; font-weight: bold; color: #2d82ff; }
 .exact-value { color: #28a745; }
@@ -37,6 +38,8 @@ def apply_preset():
     elif p == "تكامل: دالة مثلثية": st.session_state.func_text = "x * sin(x)"
     elif p == "جذور: دالة تكعيبية": st.session_state.func_text = "x**3 - x - 2"
     elif p == "جذور: دالة أسية": st.session_state.func_text = "exp(-x) - x"
+    elif p == "تفاضلية: دالة خطية": st.session_state.func_text = "x - y + 2"
+    elif p == "تفاضل: دالة لوغاريتمية": st.session_state.func_text = "x * log(x)"
 
 # ==========================================
 # 📌 القائمة الجانبية
@@ -45,22 +48,26 @@ st.sidebar.title("🧮 الأقسام الرياضية")
 app_mode = st.sidebar.radio("اختر العملية المطلوبة:", [
     "📈 التكامل العددي (Integration)", 
     "🎯 حل المعادلات (Root Finding)",
-    "🧮 أنظمة المعادلات الخطية (Linear Systems)"
+    "🧮 أنظمة المعادلات الخطية (Linear Systems)",
+    "🔬 المعادلات التفاضلية (Differential Eq)",
+    "📐 التفاضل العددي (Differentiation)",
+    "📉 الاستيفاء وتوفيق المنحنيات (Interpolation)"
 ])
 st.sidebar.markdown("---")
 
-if "Linear" not in app_mode:
+if app_mode not in ["🧮 أنظمة المعادلات الخطية (Linear Systems)", "📉 الاستيفاء وتوفيق المنحنيات (Interpolation)"]:
     st.sidebar.selectbox("💡 أمثلة سريعة للتدريب:", 
-        ["اختر مثالاً...", "تكامل: دالة أسية (جرسية)", "تكامل: دالة مثلثية", "جذور: دالة تكعيبية", "جذور: دالة أسية"], 
+        ["اختر مثالاً...", "تكامل: دالة أسية (جرسية)", "تكامل: دالة مثلثية", "جذور: دالة تكعيبية", "جذور: دالة أسية", "تفاضلية: دالة خطية", "تفاضل: دالة لوغاريتمية"], 
         key='preset', on_change=apply_preset)
 
-# --- 🎯 إضافة شريط للتحكم في دقة الأرقام ---
+# --- 🎯 إعدادات إضافية ---
 st.sidebar.markdown("---")
 dp = st.sidebar.slider("🎯 دقة الأرقام (Decimal Places):", min_value=2, max_value=10, value=6)
+show_tutorial = st.sidebar.toggle("👀 وضع الشرح (إظهار تعويض الخطوة الأولى)", value=False)
 
-# --- 🕒 تصميم سجل العمليات ---
+# --- 🕒 سجل العمليات ---
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 🕒 سجل العمليات (History)")
+st.sidebar.markdown("### 🕒 السجل (History)")
 if st.sidebar.button("🗑️ مسح السجل", use_container_width=True):
     st.session_state.history = []
     st.rerun()
@@ -78,40 +85,46 @@ col_control, col_display = st.columns([1, 2.5])
 # ⚙️ العمود الأيسر: لوحة التحكم
 # ==========================================
 with col_control:
-    st.markdown(f"### 🎛️ إعدادات {app_mode.split(' ')[1]}")
+    st.markdown(f"### 🎛️ إعدادات الإدخال")
     
     # -----------------------------------------------------
-    # 1. إعدادات قسم أنظمة المعادلات الخطية
+    # 1. إعدادات الاستيفاء (Interpolation)
     # -----------------------------------------------------
-    if "Linear" in app_mode:
-        st.info("💡 اكتب المعادلات بأي ترتيب عشوائي، والبرنامج سيقوم بترتيبها أوتوماتيكياً لتكون مسيطرة قطرياً.")
-        method = st.selectbox("اختر طريقة الحل:", ["جاكوبي (Jacobi)", "جاوس-سيدل (Gauss-Seidel)"])
+    if "Interpolation" in app_mode:
+        method = st.selectbox("طريقة الاستيفاء:", ["لاجرانج (Lagrange)"])
+        num_pts = st.number_input("عدد النقاط (n):", min_value=2, max_value=10, value=3)
+        st.write("أدخل قيم X و Y:")
+        df_pts = pd.DataFrame({"X": np.arange(num_pts, dtype=float), "Y": np.random.randint(1, 10, num_pts).astype(float)})
+        edited_pts = st.data_editor(df_pts, use_container_width=True, hide_index=True)
         
-        n_vars = st.number_input("عدد المتغيرات (المعادلات):", min_value=2, max_value=50, value=3)
+    # -----------------------------------------------------
+    # 2. إعدادات الأنظمة الخطية
+    # -----------------------------------------------------
+    elif "Linear" in app_mode:
+        method = st.selectbox("اختر طريقة الحل:", ["جاكوبي (Jacobi)", "جاوس-سيدل (Gauss-Seidel)", "الحذف لجاوس (Gaussian Elimination)"])
+        n_vars = st.number_input("عدد المتغيرات (المعادلات):", min_value=2, max_value=10, value=3)
         
-        # وضع مصفوفة افتراضية "غير مرتبة" عشان اليوزر يجرب السحر
         default_matrix = np.zeros((n_vars, n_vars + 1))
         if n_vars == 3:
-            # مصفوفة متلخبطة عمداً لتجربة خوارزمية الترتيب
-            default_matrix = np.array([
-                [2, 8, -1, 11], 
-                [-1, 1, 4, 3], 
-                [5, -1, 1, 10]
-            ], dtype=float)
+            default_matrix = np.array([[2, 8, -1, 11], [-1, 1, 4, 3], [5, -1, 1, 10]], dtype=float)
             
         cols = [f"x{i+1}" for i in range(n_vars)] + ["= b"]
         df_matrix = pd.DataFrame(default_matrix, columns=cols)
         
-        st.markdown(f"**المصفوفة الموسعة $[A | b]$ بحجم ({n_vars}×{n_vars+1}):**")
+        st.markdown(f"**المصفوفة الموسعة $[A | b]$:**")
         edited_df = st.data_editor(df_matrix, use_container_width=True, hide_index=True)
         
-        tol_str = st.text_input("نسبة الخطأ المقبولة (Tolerance):", value="1e-6")
+        if "Gauss" not in method or "Seidel" in method:
+            tol_str = st.text_input("نسبة الخطأ المقبولة (Tolerance):", value="1e-6")
         
     # -----------------------------------------------------
-    # 2. إعدادات الأقسام القديمة (التكامل والجذور)
+    # 3. إعدادات الدوال (تكامل، جذور، تفاضل، معادلات تفاضلية)
     # -----------------------------------------------------
     else:
-        func_input = st.text_input("الدالة الرياضية f(x):", key="func_text", placeholder="استخدم الآلة الحاسبة للكتابة...")
+        if "Differential" in app_mode:
+            func_input = st.text_input("الدالة التفاضلية y' = f(x,y):", key="func_text", placeholder="مثال: x - y")
+        else:
+            func_input = st.text_input("الدالة الرياضية f(x):", key="func_text", placeholder="استخدم الآلة الحاسبة...")
         
         with st.expander("🧮 إظهار / إخفاء الآلة الحاسبة", expanded=False):
             c1, c2, c3, c4, c5 = st.columns(5)
@@ -120,68 +133,79 @@ with col_control:
             c3.button("tan", on_click=append_to_func, args=("tan(",))
             c4.button("π", on_click=append_to_func, args=("pi",))
             c5.button("🧹", on_click=clear_func, type="secondary")
-
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("sin⁻¹", on_click=append_to_func, args=("asin(",))
             c2.button("cos⁻¹", on_click=append_to_func, args=("acos(",))
             c3.button("tan⁻¹", on_click=append_to_func, args=("atan(",))
             c4.button("e^( )", on_click=append_to_func, args=("exp(",))
             c5.button("√", on_click=append_to_func, args=("sqrt(",))
-
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("7", on_click=append_to_func, args=("7",))
             c2.button("8", on_click=append_to_func, args=("8",))
             c3.button("9", on_click=append_to_func, args=("9",))
             c4.button("DEL", on_click=backspace_func)
             c5.button("x", on_click=append_to_func, args=("x",))
-
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("4", on_click=append_to_func, args=("4",))
             c2.button("5", on_click=append_to_func, args=("5",))
             c3.button("6", on_click=append_to_func, args=("6",))
             c4.button("×", on_click=append_to_func, args=("*",))
             c5.button("÷", on_click=append_to_func, args=("/",))
-
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("1", on_click=append_to_func, args=("1",))
             c2.button("2", on_click=append_to_func, args=("2",))
             c3.button("3", on_click=append_to_func, args=("3",))
             c4.button("+", on_click=append_to_func, args=("+",))
             c5.button("-", on_click=append_to_func, args=("-",))
-
             c1, c2, c3, c4, c5 = st.columns(5)
             c1.button("0", on_click=append_to_func, args=("0",))
             c2.button(".", on_click=append_to_func, args=(".",))
             c3.button("(", on_click=append_to_func, args=("(",))
             c4.button(")", on_click=append_to_func, args=(")",))
-            c5.button("xʸ", on_click=append_to_func, args=("**",))
+            c5.button("y", on_click=append_to_func, args=("y",))
 
         angle_mode = st.radio("نظام الزوايا:", ["راديان (Rad)", "درجات (Deg)"], horizontal=True)
 
         if "Root" in app_mode:
-            method = st.selectbox("اختر طريقة الحل:", ["طريقة التنصيف (Bisection)", "الوضع الخاطئ (False Position)", "نيوتن-رافسون (Newton)", "طريقة القاطع (Secant)"])
-            if method in ["طريقة التنصيف (Bisection)", "الوضع الخاطئ (False Position)"]:
+            method = st.selectbox("طريقة الحل:", ["التنصيف (Bisection)", "الوضع الخاطئ (False Position)", "نيوتن-رافسون (Newton)", "القاطع (Secant)"])
+            if method in ["التنصيف (Bisection)", "الوضع الخاطئ (False Position)"]:
                 col1, col2 = st.columns(2)
                 with col1: a_str = st.text_input("من (a):", value="0")
                 with col2: b_str = st.text_input("إلى (b):", value="2")
             elif "Newton" in method:
-                a_str = st.text_input("نقطة التخمين المبدئية (x0):", value="1")
+                a_str = st.text_input("تخمين أولي (x0):", value="1")
                 b_str = "0"
             elif "Secant" in method:
                 col1, col2 = st.columns(2)
-                with col1: a_str = st.text_input("التخمين الأول (x0):", value="0")
-                with col2: b_str = st.text_input("التخمين الثاني (x1):", value="1")
-            tol_str = st.text_input("نسبة الخطأ المقبولة (Tolerance):", value="1e-6")
+                with col1: a_str = st.text_input("تخمين 1 (x0):", value="0")
+                with col2: b_str = st.text_input("تخمين 2 (x1):", value="1")
+            tol_str = st.text_input("نسبة الخطأ (Tolerance):", value="1e-6")
             
-        else:
+        elif "Differential" in app_mode:
+            method = st.selectbox("طريقة الحل:", ["رينج-كوتا الرابعة (RK4)", "رينج-كوتا الثانية (RK2)"])
+            col1, col2 = st.columns(2)
+            with col1: x0_str = st.text_input("القيمة الابتدائية x0:", value="0")
+            with col2: y0_str = st.text_input("القيمة الابتدائية y0:", value="1")
+            col3, col4 = st.columns(2)
+            with col3: xend_str = st.text_input("قيمة x المستهدفة:", value="1")
+            with col4: h_str = st.text_input("حجم الخطوة (h):", value="0.1")
+            
+        elif "Differentiation" in app_mode:
+            method = st.selectbox("طريقة التفاضل التقريبي:", ["الفروق الأمامية (Forward)", "الفروق الخلفية (Backward)", "الفروق المركزية (Central)"])
+            col1, col2 = st.columns(2)
+            with col1: x0_str = st.text_input("احسب المشتقة عند x =", value="1")
+            with col2: h_str = st.text_input("حجم الخطوة (h):", value="0.01")
+            
+        elif "Integration" in app_mode:
+            method = st.selectbox("طريقة التكامل:", ["شبه المنحرف (Trapezoidal)", "سيمبسون 1/3 (Simpson 1/3)"])
             col1, col2 = st.columns(2)
             with col1: a_str = st.text_input("الحد الأدنى (a):", value="0")
             with col2: b_str = st.text_input("الحد الأقصى (b):", value="2")
-            input_type = st.radio("طريقة الإدخال:", ["لدي عدد القطاعات (n)", "لدي حجم الخطوة (h)"])
+            input_type = st.radio("طريقة الإدخال:", ["عدد القطاعات (n)", "حجم الخطوة (h)"])
             val = st.number_input("أدخل القيمة (n أو h):", value=10.0, min_value=0.0001)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    calc_btn = st.button("🚀 احسب", type="primary", use_container_width=True)
+    calc_btn = st.button("🚀 احسب النتائج", type="primary", use_container_width=True)
 
 # ==========================================
 # 📊 العمود الأيمن: شاشة النتائج والرسم
@@ -189,275 +213,169 @@ with col_control:
 with col_display:
     if calc_btn:
         
-        # ========================================================
-        # 🟢 1. تنفيذ كود أنظمة المعادلات (الخطي)
-        # ========================================================
-        if "Linear" in app_mode:
-            try:
-                tol_clean = tol_str.replace(' ', '')
-                tol_val = float(sp.sympify(tol_clean, locals={'e': sp.E}))
-            except Exception:
-                st.error("❌ تأكد من كتابة نسبة الخطأ بشكل صحيح.")
+        # ==================================
+        # 1. الاستيفاء (Interpolation)
+        # ==================================
+        if "Interpolation" in app_mode:
+            x_vals = edited_pts["X"].values
+            y_vals = edited_pts["Y"].values
+            
+            if len(set(x_vals)) != len(x_vals):
+                st.error("❌ قيم X يجب أن تكون فريدة (لا يمكن تكرار قيمة X).")
                 st.stop()
                 
-            A_input = edited_df.iloc[:, :-1].values.astype(float)
-            b_input = edited_df.iloc[:, -1].values.astype(float)
-            n = len(b_input)
+            x_sym = sp.Symbol('x')
+            poly = 0
             
-            # 🚀 السحر يبدأ هنا: خوارزمية الترتيب الأوتوماتيكي (Partial Pivoting)
-            indices = []
-            used_rows = set()
-            for i in range(n):
-                max_row = -1
-                max_val = -1
-                for r in range(n):
-                    if r not in used_rows:
-                        if abs(A_input[r, i]) > max_val:
-                            max_val = abs(A_input[r, i])
-                            max_row = r
-                indices.append(max_row)
-                used_rows.add(max_row)
-
-            A = A_input[indices]
-            b = b_input[indices]
-
-            # عرض رسالة لو البرنامج رتبهم
-            if indices != list(range(n)):
-                st.success("✨ تم إعادة ترتيب المعادلات أوتوماتيكياً (Diagonally Dominant) لضمان الوصول للحل!")
-                sorted_df = pd.DataFrame(np.column_stack((A, b)), columns=cols)
-                with st.expander("👀 اضغط هنا لرؤية المعادلات بعد الترتيب", expanded=False):
-                    st.dataframe(sorted_df, use_container_width=True)
-
-            # التحقق من أصفار القطر الرئيسي بعد الترتيب
-            if np.any(np.diag(A) == 0):
-                st.error("❌ يوجد صفر على القطر الرئيسي حتى بعد الترتيب. النظام قد لا يكون له حل وحيد.")
-                st.stop()
+            if "Lagrange" in method:
+                st.markdown("### 📚 القانون الرياضي (Lagrange Polynomial):")
+                st.latex(r"P(x) = \sum_{i=0}^{n} y_i \prod_{j \neq i} \frac{x - x_j}{x_i - x_j}")
                 
-            # التحقق: هل هي مسيطرة قطرياً فعلاً؟
-            is_dd = True
-            for i in range(n):
-                sum_others = np.sum(np.abs(A[i])) - abs(A[i, i])
-                if abs(A[i, i]) < sum_others:
-                    is_dd = False
-                    break
-                    
-            if not is_dd:
-                st.warning("⚠️ تحذير: المصفوفة الناتجة ليست مسيطرة قطرياً بشكل كامل. قد لا تصل الطريقة للحل (Divergence) ولكن سنحاول.")
-
-            st.markdown("### 📚 القانون الرياضي المستخدم:")
-            if "Jacobi" in method:
-                st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j \neq i} a_{ij} x_j^{(k)} \right)")
-            else:
-                st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j < i} a_{ij} x_j^{(k+1)} - \sum_{j > i} a_{ij} x_j^{(k)} \right)")
-
-            x = np.zeros(n)
-            steps_data = []
-            iterations = 0
-            final_error = 0
-            max_iter = 500
-            
-            for it in range(max_iter):
-                x_new = np.zeros(n)
-                for i in range(n):
-                    s = 0
-                    for j in range(n):
+                # حساب متعددة الحدود
+                for i in range(len(x_vals)):
+                    term = y_vals[i]
+                    for j in range(len(x_vals)):
                         if i != j:
-                            if "Jacobi" in method: s += A[i, j] * x[j]
-                            else: s += A[i, j] * (x_new[j] if j < i else x[j])
-                    x_new[i] = (b[i] - s) / A[i, i]
-                
-                error = np.max(np.abs(x_new - x))
-                
-                step_dict = {"Iteration": it + 1}
-                for i in range(n): step_dict[f"x{i+1}"] = f"{x_new[i]:.{dp}f}"
-                step_dict["Error"] = f"{error:.2e}"
-                steps_data.append(step_dict)
-                
-                iterations = it + 1
-                final_error = error
-                
-                if error < tol_val: break
-                
-                # إيقاف مبكر لو الأرقام ضربت للمالانهاية (Divergence)
-                if error > 1e10:
-                    break
+                            term *= (x_sym - x_vals[j]) / (x_vals[i] - x_vals[j])
+                    poly += term
                     
-                x = x_new.copy()
-
-            if iterations == max_iter or final_error > 1e10:
-                st.error("❌ الطريقة فشلت في الوصول لحل (Diverged). الأرقام تتباعد عن الحل الصحيح.")
-
-            # عرض النتيجة النهائية
-            st.markdown("### 📍 قيم المتغيرات النهائية")
-            res_df = pd.DataFrame({
-                "المتغير": [f"x{i+1}" for i in range(n)],
-                "القيمة النهائية": [f"{x_new[i]:.{dp}f}" for i in range(n)]
-            })
-            st.dataframe(res_df, use_container_width=True)
-            
-            st.info(f"تمت الحسابات في **{iterations} خطوة** | أقصى خطأ: **{final_error:.2e}**")
-            st.session_state.history.append(f"🧮 **نظام خطي ({method.split(' ')[0]}):**\nالمتغيرات: `{n}`\nالخطوات: `{iterations}`")
-
-            st.markdown("### 📝 جدول خطوات الحل (Iterations Table)")
-            df_steps = pd.DataFrame(steps_data)
-            st.dataframe(df_steps, use_container_width=True, hide_index=True)
-            
-            csv = df_steps.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("📥 تحميل الجدول كملف إكسيل (CSV)", data=csv, file_name='linear_iterations.csv', mime='text/csv', use_container_width=True)
-
-
-        # ========================================================
-        # 🔵 2. تنفيذ الأقسام القديمة (الجذور والتكامل)
-        # ========================================================
-        else:
-            if not func_input.strip() or not a_str.strip(): st.warning("⚠️ يرجى تعبئة الدالة والحدود أولاً."); st.stop()
-                
-            func_clean = func_input.replace('^', '**').replace('ln', 'log').replace(' ', '')
-            a_clean = a_str.replace(' ', '')
-            b_clean = b_str.replace(' ', '')
-            
-            x = sp.Symbol('x')
-            custom_dict = {'e': sp.E}
-            if "Deg" in angle_mode: custom_dict.update({'sin': lambda arg: sp.sin(arg * sp.pi / 180), 'cos': lambda arg: sp.cos(arg * sp.pi / 180), 'tan': lambda arg: sp.tan(arg * sp.pi / 180)})
-
             try:
-                f_expr = sp.sympify(func_clean, locals=custom_dict)
-                f = sp.lambdify(x, f_expr, "numpy")
-                a_val = float(sp.sympify(a_clean, locals={'e': sp.E}))
-                b_val = float(sp.sympify(b_clean, locals={'e': sp.E}))
-                if "Root" in app_mode:
+                poly_simplified = sp.simplify(poly)
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء تبسيط المعادلة: {e}")
+                st.stop()
+                
+            st.markdown("### 📍 معادلة المنحنى المستنتجة:")
+            st.info(f"**P(x) =** {poly_simplified}")
+            
+            if show_tutorial:
+                st.markdown(f"<div class='result-card tutorial-card'><b>💡 توضيح:</b> البرنامج قام بحساب حدود لاجرانج لكل نقطة، ثم قام بجمعها وتبسيطها رياضياً للوصول للمعادلة النهائية.</div>", unsafe_allow_html=True)
+
+            # الرسم البياني
+            p_func = sp.lambdify(x_sym, poly_simplified, "numpy")
+            x_curve = np.linspace(min(x_vals) - 1, max(x_vals) + 1, 200)
+            y_curve = p_func(x_curve)
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='markers', name='النقاط المُدخلة (Data Points)', marker=dict(color='red', size=12)))
+            fig.add_trace(go.Scatter(x=x_curve, y=y_curve, mode='lines', name='المنحنى المستنتج (Curve)', line=dict(color='#007bff', width=2)))
+            fig.update_layout(title="منحنى الاستيفاء", template="plotly_white")
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.session_state.history.append(f"📉 **استيفاء:** تم استنتاج المعادلة لـ {len(x_vals)} نقاط.")
+
+        # ==================================
+        # 2. الأنظمة الخطية (Linear Systems)
+        # ==================================
+        elif "Linear" in app_mode:
+            try:
+                A_input = edited_df.iloc[:, :-1].values.astype(float)
+                b_input = edited_df.iloc[:, -1].values.astype(float)
+                n = len(b_input)
+                
+                if "Gauss" not in method or "Seidel" in method:
                     tol_clean = tol_str.replace(' ', '')
                     tol_val = float(sp.sympify(tol_clean, locals={'e': sp.E}))
-            except Exception as e: st.error(f"❌ خطأ: يرجى كتابة الدالة والأرقام بشكل صحيح. (التفاصيل: {e})"); st.stop()
-
-            # --------- جذور المعادلات ---------
-            if "Root" in app_mode:
-                root, iterations, error = None, 0, 0
-                steps_data = [] 
+            except Exception:
+                st.error("❌ تأكد من كتابة الأرقام بشكل صحيح.")
+                st.stop()
                 
-                st.markdown("### 📚 القانون الرياضي المستخدم:")
-                if "Bisection" in method: st.latex(r"x_{root} = \frac{a + b}{2}")
-                elif "False Position" in method: st.latex(r"x_{root} = \frac{a \cdot f(b) - b \cdot f(a)}{f(b) - f(a)}")
-                elif "Newton" in method: st.latex(r"x_{i+1} = x_i - \frac{f(x_i)}{f'(x_i)}")
-                elif "Secant" in method: st.latex(r"x_{i+1} = x_i - f(x_i) \frac{x_i - x_{i-1}}{f(x_i) - f(x_{i-1})}")
+            # الطريقة المباشرة: الحذف لجاوس
+            if "Elimination" in method:
+                st.markdown("### 📚 طريقة الحذف لجاوس (Gaussian Elimination)")
+                Ab = np.column_stack((A_input, b_input))
                 
-                if method in ["طريقة التنصيف (Bisection)", "الوضع الخاطئ (False Position)"]:
-                    if a_val >= b_val: st.error("❌ النقطة (b) يجب أن تكون أكبر من (a)."); st.stop()
-                    fa, fb = f(a_val), f(b_val)
-                    if fa * fb > 0: st.error(f"❌ الدالة لا تقطع محور السينات بين {a_val} و {b_val}. (f(a) و f(b) نفس الإشارة)"); st.stop()
+                # Forward Elimination مع Partial Pivoting
+                for i in range(n):
+                    # Pivoting
+                    max_row = np.argmax(np.abs(Ab[i:n, i])) + i
+                    Ab[[i, max_row]] = Ab[[max_row, i]]
                     
-                    a_temp, b_temp = a_val, b_val
-                    for i in range(100):
-                        if "Bisection" in method: c = (a_temp + b_temp) / 2.0
-                        else: c = (a_temp * f(b_temp) - b_temp * f(a_temp)) / (f(b_temp) - f(a_temp))
-                        fc = f(c)
-                        current_error = abs(b_temp - a_temp) / 2.0 if "Bisection" in method else abs(fc)
-                        steps_data.append({"Iteration": i + 1, "a": f"{a_temp:.{dp}f}", "b": f"{b_temp:.{dp}f}", "Root (c)": f"{c:.{dp}f}", "f(c)": f"{fc:.{dp}f}", "Error": f"{current_error:.2e}"})
-                        if abs(fc) < tol_val or current_error < tol_val: root, iterations, error = c, i+1, abs(fc); break
-                        if fa * fc < 0: b_temp = c
-                        else: a_temp, fa = c, fc
-                    if root is None: root, iterations, error = c, 100, abs(fc)
-
-                elif "Newton" in method:
-                    try: df_expr = sp.diff(f_expr, x); df = sp.lambdify(x, df_expr, "numpy")
-                    except Exception: st.error("❌ فشل في حساب اشتقاق الدالة."); st.stop()
+                    if Ab[i, i] == 0:
+                        st.error("❌ المصفوفة شاذة (Singular). لا يوجد حل وحيد.")
+                        st.stop()
+                        
+                    # Elimination
+                    for j in range(i+1, n):
+                        factor = Ab[j, i] / Ab[i, i]
+                        Ab[j] = Ab[j] - factor * Ab[i]
+                        
+                # Back Substitution
+                x_res = np.zeros(n)
+                for i in range(n-1, -1, -1):
+                    x_res[i] = (Ab[i, -1] - np.sum(Ab[i, i+1:n] * x_res[i+1:n])) / Ab[i, i]
                     
-                    x_curr = a_val 
-                    for i in range(100):
-                        fx, dfx = f(x_curr), df(x_curr)
-                        if dfx == 0: st.error("❌ المشتقة تساوي صفر، طريقة نيوتن تفشل هنا."); st.stop()
-                        x_next = x_curr - fx / dfx
-                        current_error = abs(x_next - x_curr)
-                        steps_data.append({"Iteration (i)": i + 1, "X_i": f"{x_curr:.{dp}f}", "f(X_i)": f"{fx:.{dp}f}", "f'(X_i)": f"{dfx:.{dp}f}", "X_i+1": f"{x_next:.{dp}f}", "Error": f"{current_error:.2e}"})
-                        if current_error < tol_val: root, iterations, error = x_next, i+1, abs(f(x_next)); break
-                        x_curr = x_next
-                    if root is None: root, iterations, error = x_curr, 100, abs(f(x_curr))
-
-                elif "Secant" in method:
-                    x0, x1 = a_val, b_val
-                    for i in range(100):
-                        f0, f1 = f(x0), f(x1)
-                        if f1 - f0 == 0: st.error("❌ القسمة على صفر، طريقة القاطع تفشل هنا."); st.stop()
-                        x2 = x1 - f1 * (x1 - x0) / (f1 - f0)
-                        current_error = abs(x2 - x1)
-                        steps_data.append({"Iteration (i)": i + 1, "X_{i-1}": f"{x0:.{dp}f}", "X_i": f"{x1:.{dp}f}", "f(X_i)": f"{f1:.{dp}f}", "X_{i+1}": f"{x2:.{dp}f}", "Error": f"{current_error:.2e}"})
-                        if current_error < tol_val: root, iterations, error = x2, i+1, abs(f(x2)); break
-                        x0, x1 = x1, x2
-                    if root is None: root, iterations, error = x2, 100, abs(f(x2))
-
-                res_col1, res_col2 = st.columns(2)
-                with res_col1: st.markdown(f"<div class='result-card exact-card'><div class='card-title'>📍 قيمة الجذر النهائي (Root)</div><div class='card-value exact-value'>{root:.{dp}f}</div></div>", unsafe_allow_html=True)
-                with res_col2: st.markdown(f"<div class='result-card'><div class='card-title'>⚙️ الأداء (Performance)</div><div class='card-value' style='font-size:22px;'>الخطأ: {error:.2e}</div><div class='card-subtext'>تم الوصول للحل بعد {iterations} خطوة</div></div>", unsafe_allow_html=True)
+                st.markdown("### 📍 قيم المتغيرات النهائية (الحل المباشر)")
+                res_df = pd.DataFrame({"المتغير": [f"x{i+1}" for i in range(n)], "القيمة الدقيقة": [f"{x_res[i]:.{dp}f}" for i in range(n)]})
+                st.dataframe(res_df, use_container_width=True)
+                st.session_state.history.append(f"🧮 **نظام خطي (جاوس المباشر):** تم الحل بنجاح.")
                 
-                st.session_state.history.append(f"🎯 **جذر:** `{func_input}`\n\n**النتيجة:** `{root:.{dp}f}`")
-
-                st.markdown("### 📝 جدول خطوات الحل (Iterations Table)")
-                if len(steps_data) > 0:
-                    df_steps = pd.DataFrame(steps_data)
-                    st.dataframe(df_steps, use_container_width=True, hide_index=True)
-                    csv = df_steps.to_csv(index=False).encode('utf-8-sig')
-                    st.download_button("📥 تحميل الجدول كملف إكسيل (CSV)", data=csv, file_name='iterations.csv', mime='text/csv', use_container_width=True)
-
-                st.markdown("### 🎨 الرسم البياني التفاعلي")
-                x_min, x_max = root - 2, root + 2
-                if method in ["طريقة التنصيف (Bisection)", "الوضع الخاطئ (False Position)"]: x_min, x_max = min(a_val, root-1), max(b_val, root+1)
-                x_smooth = np.linspace(x_min, x_max, 500)
-                y_smooth = f(x_smooth)
-                if isinstance(y_smooth, (int, float)): y_smooth = np.full_like(x_smooth, y_smooth)
-
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=x_smooth, y=y_smooth, mode='lines', name='f(x)', line=dict(color='#2d82ff', width=3)))
-                fig.add_trace(go.Scatter(x=[x_min, x_max], y=[0, 0], mode='lines', name='y=0', line=dict(color='#ff4b4b', width=2, dash='dash')))
-                fig.add_trace(go.Scatter(x=[root], y=[0], mode='markers', name='Root', marker=dict(color='#28a745', size=12, symbol='circle')))
-                fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
-                st.plotly_chart(fig, use_container_width=True)
-
-            # --------- التكامل ---------
+            # الطرق التكرارية: جاكوبي وجاوس سيدل
             else:
-                st.markdown("### 📚 القوانين الرياضية (Numerical Methods):")
-                st.latex(r"\text{Trapezoidal: } \int_{a}^{b} f(x) dx \approx \frac{h}{2} \left[ f(x_0) + 2 \sum_{i=1}^{n-1} f(x_i) + f(x_n) \right]")
-                st.latex(r"\text{Simpson 1/3: } \int_{a}^{b} f(x) dx \approx \frac{h}{3} \left[ f(x_0) + 4 \sum_{i \text{ odd}} f(x_i) + 2 \sum_{i \text{ even}} f(x_i) + f(x_n) \right]")
-                st.latex(r"\text{Simpson 3/8: } \int_{a}^{b} f(x) dx \approx \frac{3h}{8} \left[ f(x_0) + 3 \sum_{i \neq 3k} f(x_i) + 2 \sum_{i = 3k} f(x_i) + f(x_n) \right]")
+                indices = []
+                used_rows = set()
+                for i in range(n):
+                    max_row, max_val = -1, -1
+                    for r in range(n):
+                        if r not in used_rows:
+                            if abs(A_input[r, i]) > max_val:
+                                max_val = abs(A_input[r, i])
+                                max_row = r
+                    indices.append(max_row)
+                    used_rows.add(max_row)
 
-                if a_val >= b_val: st.error("❌ الحد الأقصى يجب أن يكون أكبر من الحد الأدنى."); st.stop()
-                exact_val, _ = quad(f, a_val, b_val)
+                A, b = A_input[indices], b_input[indices]
+                if indices != list(range(n)): st.success("✨ تم إعادة ترتيب المعادلات أوتوماتيكياً لضمان الوصول للحل (Pivoting)!")
+                if np.any(np.diag(A) == 0): st.error("❌ يوجد صفر على القطر الرئيسي حتى بعد الترتيب."); st.stop()
+
+                st.markdown("### 📚 القانون الرياضي المستخدم:")
+                if "Jacobi" in method: st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j \neq i} a_{ij} x_j^{(k)} \right)")
+                else: st.latex(r"x_i^{(k+1)} = \frac{1}{a_{ii}} \left( b_i - \sum_{j < i} a_{ij} x_j^{(k+1)} - \sum_{j > i} a_{ij} x_j^{(k)} \right)")
+
+                x_arr = np.zeros(n)
+                steps_data, iterations, final_error, max_iter = [], 0, 0, 500
                 
-                if input_type == "لدي حجم الخطوة (h)": h = val; n = int(round((b_val - a_val) / h))
-                else: n = int(val); h = (b_val - a_val) / n
+                for it in range(max_iter):
+                    x_new = np.zeros(n)
+                    for i in range(n):
+                        s = 0
+                        for j in range(n):
+                            if i != j:
+                                if "Jacobi" in method: s += A[i, j] * x_arr[j]
+                                else: s += A[i, j] * (x_new[j] if j < i else x_arr[j])
+                        x_new[i] = (b[i] - s) / A[i, i]
+                        
+                        # وضع الشرح
+                        if show_tutorial and it == 0 and i == 0:
+                            st.markdown(f"<div class='result-card tutorial-card'><b>💡 تعويض الخطوة 1 للمتغير x1:</b><br> x1 = ( {b[i]} - مجموع الباقي ) / {A[i,i]} = {x_new[i]:.{dp}f}</div>", unsafe_allow_html=True)
+                    
+                    error = np.max(np.abs(x_new - x_arr))
+                    step_dict = {"Iteration": it + 1}
+                    for i in range(n): step_dict[f"x{i+1}"] = f"{x_new[i]:.{dp}f}"
+                    step_dict["Error"] = f"{error:.2e}"
+                    steps_data.append(step_dict)
+                    
+                    iterations, final_error = it + 1, error
+                    if error < tol_val: break
+                    if error > 1e10: break
+                    x_arr = x_new.copy()
 
-                x_vals = np.linspace(a_val, b_val, n + 1)
-                y_vals = f(x_vals)
-                if isinstance(y_vals, (int, float)): y_vals = np.full_like(x_vals, y_vals)
+                if iterations == max_iter or final_error > 1e10: st.error("❌ الطريقة فشلت في الوصول لحل (Diverged).")
+                st.markdown("### 📍 قيم المتغيرات النهائية")
+                st.dataframe(pd.DataFrame({"المتغير": [f"x{i+1}" for i in range(n)], "القيمة النهائية": [f"{x_new[i]:.{dp}f}" for i in range(n)]}), use_container_width=True)
+                st.info(f"تمت الحسابات في **{iterations} خطوة** | أقصى خطأ: **{final_error:.2e}**")
+                st.markdown("### 📝 جدول خطوات الحل")
+                df_steps = pd.DataFrame(steps_data)
+                st.dataframe(df_steps, use_container_width=True, hide_index=True)
+                st.download_button("📥 تحميل الجدول (CSV)", data=df_steps.to_csv(index=False).encode('utf-8-sig'), file_name='linear_steps.csv', mime='text/csv', use_container_width=True)
 
-                trap_val = (h / 2) * (y_vals[0] + 2 * np.sum(y_vals[1:-1]) + y_vals[-1])
-                simp13_val = (h / 3) * (y_vals[0] + 4 * np.sum(y_vals[1:-1:2]) + 2 * np.sum(y_vals[2:-2:2]) + y_vals[-1]) if n % 2 == 0 else None
-                simp38_val = None
-                if n % 3 == 0:
-                    integral = y_vals[0] + y_vals[-1]
-                    for i in range(1, n): integral += 2 * y_vals[i] if i % 3 == 0 else 3 * y_vals[i]
-                    simp38_val = (3 * h / 8) * integral
-
-                st.markdown(f"<div class='result-card exact-card'><div class='card-title'>🎯 القيمة الدقيقة التحليلية (Exact Integration)</div><div class='card-value exact-value'>{exact_val:.{dp}f}</div></div>", unsafe_allow_html=True)
-                st.session_state.history.append(f"📈 **تكامل:** `{func_input}`\n\n**من:** `{a_val}` **إلى:** `{b_val}`\n\n**النتيجة:** `{exact_val:.{dp}f}`")
-
-                st.markdown("### ⚖️ مقارنة طرق التكامل")
-                df_data = []
-                for m_name, m_val in [("شبه المنحرف (Trapezoidal)", trap_val), ("سمبسون 1/3 (Simpson 1/3)", simp13_val), ("سمبسون 3/8 (Simpson 3/8)", simp38_val)]:
-                    if m_val is not None: df_data.append({"الطريقة": m_name, "النتيجة التقريبية": f"{m_val:.{dp}f}", "الخطأ المطلق": f"{abs(exact_val - m_val):.2e}"})
-                    else: df_data.append({"الطريقة": m_name, "النتيجة التقريبية": f"❌ يتطلب شروط معينة لـ n", "الخطأ المطلق": "-"})
-                
-                st.dataframe(pd.DataFrame(df_data), use_container_width=True, hide_index=True)
-
-                st.markdown("### 🎨 الرسم البياني التفاعلي للمساحة")
-                x_smooth = np.linspace(a_val, b_val, 500)
-                y_smooth = f(x_smooth)
-                if isinstance(y_smooth, (int, float)): y_smooth = np.full_like(x_smooth, y_smooth)
-
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=x_smooth, y=y_smooth, mode='lines', name='f(x)', line=dict(color='#2d82ff', width=3)))
-                fig.add_trace(go.Scatter(x=x_smooth, y=y_smooth, fill='tozeroy', fillcolor='rgba(45, 130, 255, 0.2)', mode='none', name='Area'))
-                fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
-                st.plotly_chart(fig, use_container_width=True)
-                
-    else:
-        st.info(f"👋 أهلاً بك! أنت الآن في وضع {app_mode.split(' ')[1]}. أدخل بياناتك واضغط على احسب.")
+        # ==================================
+        # 3. الأقسام المعتمدة على الدوال
+        # ==================================
+        else:
+            if not func_input.strip(): st.warning("⚠️ يرجى تعبئة الدالة أولاً."); st.stop()
+            func_clean = func_input.replace('^', '**').replace('ln', 'log').replace(' ', '')
+            x = sp.Symbol('x')
+            y_sym = sp.Symbol('y')
+            custom_dict = {'e': sp.E}
+            if "Deg" in angle_mode: custom_dict.update({'sin': lambda arg: sp.sin(arg * sp.pi / 180), 'cos': lambda arg: sp.cos(arg * sp.pi / 1
