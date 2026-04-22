@@ -5,14 +5,18 @@ from scipy.integrate import quad
 import plotly.graph_objects as go
 import pandas as pd
 
+# ==========================================
 # === إعدادات الصفحة ===
+# ==========================================
 st.set_page_config(
     page_title="Numerical Analysis Pro", 
     page_icon="🔢", 
     layout="wide"
 )
 
+# ==========================================
 # === تصميم CSS ===
+# ==========================================
 st.markdown("""
 <style>
 .result-card { background-color: var(--secondary-background-color); padding: 20px; border-radius: 15px; border-left: 5px solid #007bff; margin-bottom: 20px; }
@@ -27,7 +31,9 @@ div[data-testid="column"] { padding: 0 3px !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# ==========================================
 # === إدارة حالة النص والسجل ===
+# ==========================================
 if 'func_text' not in st.session_state: 
     st.session_state.func_text = ""
 if 'preset' not in st.session_state: 
@@ -117,6 +123,17 @@ if not st.session_state.history:
 else:
     for item in reversed(st.session_state.history):
         st.sidebar.success(item)
+
+# تذييل شخصي للقائمة الجانبية
+st.sidebar.markdown("---")
+st.sidebar.markdown("""
+<div style='text-align: center; color: gray; font-size: 11px; margin-top: 20px;'>
+    <b style='color:#007bff;'>Numerical Analysis Laboratory</b><br>
+    Zagazig National University<br>
+    Mechatronics Engineering Dept.<br><br>
+    <i>Dev: Mohamed Khaled Mohamed El-Hadi Abulfotouh</i>
+</div>
+""", unsafe_allow_html=True)
 
 # === تقسيم الشاشة الأساسي ===
 col_control, col_display = st.columns([1, 2.5])
@@ -492,8 +509,73 @@ with col_display:
                     if error < tol_val: 
                         break
                     if error > 1e10: 
+                        st.warning("⚠️ النظام متباعد (Diverging) ولن يصل لحل بهذه الطريقة.")
                         break
                         
                     x_arr = x_new.copy()
 
-             
+                st.markdown("### 📍 جدول المحاولات (Iterations)")
+                st.dataframe(pd.DataFrame(steps_data), use_container_width=True)
+                
+                if final_error < tol_val:
+                    st.success(f"✅ تم الوصول للحل بعد {iterations} محاولة بنسبة خطأ {final_error:.2e}")
+                
+                st.session_state.history.append(f"🧮 **{method}:** تم الحل.")
+
+        # ==================================
+        # 3. الجذور (Root Finding)
+        # ==================================
+        elif "Root" in app_mode:
+            try:
+                x_sym = sp.Symbol('x')
+                func_expr = sp.sympify(st.session_state.func_text)
+                f_np = sp.lambdify(x_sym, func_expr, "numpy")
+                
+                st.markdown(f"### 🎯 حل جذور الدالة: **f(x) = {func_expr}**")
+                
+                if "Bisection" in method or "False" in method:
+                    st.info(f"الخوارزمية المختارة: {method}")
+                    st.success("تم الإعداد بنجاح! يمكنك إضافة خوارزمية التكرار هنا.")
+                elif "Newton" in method:
+                    df_expr = sp.diff(func_expr, x_sym)
+                    df_np = sp.lambdify(x_sym, df_expr, "numpy")
+                    st.latex(r"x_{n+1} = x_n - \frac{f(x_n)}{f'(x_n)}")
+                    st.info(f"المشتقة المحسوبة: **f'(x) = {df_expr}**")
+                    st.success("اضغط للبدء بتنفيذ خوارزمية نيوتن رافسون...")
+                
+                st.session_state.history.append("🎯 **جذور:** تمت التهيئة.")
+                
+            except Exception as e:
+                st.error(f"❌ خطأ في كتابة الدالة: {e}")
+
+        # ==================================
+        # 4. التكامل العددي (Integration)
+        # ==================================
+        elif "Integration" in app_mode:
+            try:
+                x_sym = sp.Symbol('x')
+                func_expr = sp.sympify(st.session_state.func_text)
+                f_np = sp.lambdify(x_sym, func_expr, "numpy")
+                
+                a = float(a_str)
+                b = float(b_str)
+                exact_val, error_est = quad(f_np, a, b)
+                
+                st.markdown("### 📍 نتائج التكامل")
+                st.info(f"تكامل الدالة: **{func_expr}** من {a} إلى {b}")
+                
+                html = f"<div class='result-card exact-card'><div class='card-title'>القيمة الدقيقة (Scipy Quad):</div><div class='card-value exact-value'>{exact_val:.{dp}f}</div></div>"
+                st.markdown(html, unsafe_allow_html=True)
+                
+                st.session_state.history.append("📈 **تكامل:** تم الحساب.")
+                
+            except Exception as e:
+                st.error(f"❌ تأكد من المدخلات والدالة: {e}")
+
+        # ==================================
+        # 5. التفاضل والمعادلات التفاضلية
+        # ==================================
+        elif "Differential" in app_mode or "Differentiation" in app_mode:
+             st.markdown("### ⚙️ التهيئة الهندسية")
+             st.info("تم استقبال المدخلات بنجاح. المكان مجهز لإضافة خوارزميات رينج-كوتا (RK4) أو الفروق المنقسمة.")
+             st.session_state.history.append("🔬 **معادلات تفاضلية:** تمت التهيئة.")
