@@ -199,7 +199,6 @@ with col_control:
         rate_return = c_r1.number_input("معدل العائد المطلوب (%):", value=20.0, step=0.5)
         inflation_rate = c_r2.number_input("معدل التضخم المتوقع (%):", value=2.0, step=0.5)
         
-        # تجهيز أسماء المشاريع
         proj_names_str = st.text_input(
             "أسماء المشاريع (افصل بينها بفاصلة ,):", 
             value="Time Fades Away, On the Beach, Tonight's the Night" if num_projects == 3 else ", ".join([f"Project {i+1}" for i in range(num_projects)])
@@ -209,7 +208,6 @@ with col_control:
             proj_names.append(f"Project {len(proj_names)+1}")
         proj_names = proj_names[:num_projects]
 
-        # بناء الجدول الافتراضي مطابقاً للمحاضرة (Problem 6, page 52)
         rows_labels = ["Year 0 (Investment - الدفع المبدئي)"] + [f"Year {yr} (Revenue)" for yr in range(1, num_years + 1)]
         default_npv_data = np.zeros((num_years + 1, num_projects))
         
@@ -232,8 +230,8 @@ with col_control:
     # -----------------------------------------------------
     elif "AON" in app_mode:
         net_type = st.selectbox(
-            "نوع التمثيل الشبكي:", 
-            ["Activity on Node (AON)", "Activity on Arrow (AOA)", "Network with Lags (شبكة بفترات تأخير)"]
+            "نوع التمثيل الشبكي (يغير شكل الرسم):", 
+            ["Activity on Node (AON) - مستطيلات", "Activity on Arrow (AOA) - دوائر وأسهم", "Network with Lags - مستطيلات بفترات تأخير"]
         )
         rel_mode = st.radio(
             "نوع العلاقة في الصف الثاني من الجدول:", 
@@ -263,7 +261,6 @@ with col_control:
         act_letters = get_activity_names(num_acts)
         rel_row_label = "Predecessors" if "Predecessors" in rel_mode else "Successors"
         
-        # تجهيز بيانات الصفوف الـ 3 (النشاط، العلاقة، الزمن)
         if preset_net == "مثال المحاضرة: 20 نشاط (A إلى T) - Successors":
             rel_row_label = "Successors"
             succ_list = ["D", "E,F", "G", "I,J", "L", "K", "H,M", "N", "P", "Q", "R", "Q", "N", "O,S", "R", "R", "R", "-", "T", "-"]
@@ -280,8 +277,13 @@ with col_control:
             time_list = ["2", "4", "8", "9", "2", "7", "4", "5", "4", "7", "3"]
             grid_data = [act_letters, pred_list, time_list]
         else:
-            default_rels = ["-"] + [act_letters[max(0, i-1)] for i in range(1, num_acts)] if "Predecessors" in rel_mode else [act_letters[min(num_acts-1, i+1)] for i in range(num_acts-1)] + ["-"]
-            default_times = [str((i % 5 + 1) * 2) for i in range(num_acts)]
+            if num_acts == 6:
+                # مثال افتراضي متفرع جميل يظهر التوازي في الشبكة بدلاً من خط مستقيم
+                default_rels = ["-", "A", "A", "B", "B,C", "D,E"] if "Predecessors" in rel_mode else ["B,C", "D,E", "E", "F", "F", "-"]
+                default_times = ["4", "6", "3", "5", "8", "2"]
+            else:
+                default_rels = ["-"] + [act_letters[max(0, i-1)] for i in range(1, num_acts)] if "Predecessors" in rel_mode else [act_letters[min(num_acts-1, i+1)] for i in range(num_acts-1)] + ["-"]
+                default_times = [str((i % 5 + 1) * 2) for i in range(num_acts)]
             grid_data = [act_letters, default_rels, default_times]
 
         df_net_horiz = pd.DataFrame(
@@ -293,7 +295,6 @@ with col_control:
         st.markdown("**📋 جدول الأنشطة الأفقي (الصف 1: الاسم | الصف 2: الاعتمادية | الصف 3: الزمن):**")
         edited_net_df = st.data_editor(df_net_horiz, use_container_width=True)
 
-        # إعدادات الـ Lags (إذا تم اختيار شبكة بـ Lags أو مثال 6.20)
         enable_lags = ("Lags" in net_type) or ("6.20" in preset_net) or st.checkbox("➕ إضافة علاقات تأخير (Network Lags - FS / SS / FF / SF)", value=False)
         edited_lags_df = None
         if enable_lags:
@@ -312,7 +313,7 @@ with col_control:
                 ])
             else:
                 lags_init = pd.DataFrame([
-                    {"From (من)": "A", "To (إلى)": "B", "Type (النوع)": "FS", "Lag (التأخير)": 0.0}
+                    {"From (من)": "A", "To (إلى)": "B", "Type (النوع)": "FS", "Lag (التأخير)": 2.0}
                 ])
             edited_lags_df = st.data_editor(lags_init, num_rows="dynamic", use_container_width=True, hide_index=True)
 
@@ -523,7 +524,7 @@ with col_display:
             
             for col_name in edited_npv_df.columns:
                 col_vals = [safe_float(v) for v in edited_npv_df[col_name].values]
-                inv_0 = abs(col_vals[0]) # الاستثمار المبدئي في أول المشروع
+                inv_0 = abs(col_vals[0])
                 revs = col_vals[1:]
                 
                 disc_flows = [-inv_0]
@@ -550,7 +551,6 @@ with col_display:
                     "Latex": " + ".join(latex_terms) + f" = \\mathbf{{\\${total_npv:,.{dp}f}}}"
                 })
             
-            # ترتيب المشاريع تنازلياً حسب الـ NPV لتحديد الأولوية (Priority)
             npv_results_sorted = sorted(npv_results, key=lambda item: item["NPV"], reverse=True)
             
             if show_tutorial:
@@ -593,7 +593,6 @@ with col_display:
             csv_npv = summary_df.to_csv(index=False).encode('utf-8-sig')
             st.download_button("📥 تحميل تقرير تقييم المشاريع (CSV)", data=csv_npv, file_name='npv_projects_report.csv', mime='text/csv', use_container_width=True)
 
-            # رسم بياني للمقارنة
             fig_npv = go.Figure()
             colors = ['#28a745' if r['NPV'] > 0 else '#dc3545' for r in npv_results_sorted]
             fig_npv.add_trace(go.Bar(
@@ -628,8 +627,7 @@ with col_display:
                     nodes.append(nm)
                     duration[nm] = tm
 
-            # بناء العلاقات القياسية (Finish-to-Start بدون تأخير أو مع تأخير مضاف)
-            edges = [] # قائمة من القواميس: {u, v, type, lag}
+            edges = []
             is_pred_mode = ("Predecessors" in rel_mode) and (preset_net != "مثال المحاضرة: 20 نشاط (A إلى T) - Successors")
             if preset_net == "مثال المحاضرة: 18 نشاط (A إلى R) - Predecessors" or "6.20" in preset_net:
                 is_pred_mode = True
@@ -648,7 +646,6 @@ with col_display:
                     else:
                         edges.append({"u": nm, "v": p, "type": "FS", "lag": 0.0})
 
-            # دمج علاقات الـ Lags الإضافية من جدول الـ Lags
             if enable_lags and edited_lags_df is not None:
                 for _, row in edited_lags_df.iterrows():
                     u_lag = str(row.get("From (من)", "")).strip()
@@ -656,7 +653,6 @@ with col_display:
                     t_lag = str(row.get("Type (النوع)", "FS")).strip().upper()
                     val_lag = safe_float(row.get("Lag (التأخير)", 0.0))
                     if u_lag in nodes and v_lag in nodes and t_lag in ["FS", "SS", "FF", "SF"]:
-                        # تحديث العلاقة إن كانت موجودة مسبقاً أو إضافتها
                         updated = False
                         for e in edges:
                             if e["u"] == u_lag and e["v"] == v_lag and e["type"] == "FS" and e["lag"] == 0.0:
@@ -667,7 +663,6 @@ with col_display:
                         if not updated:
                             edges.append({"u": u_lag, "v": v_lag, "type": t_lag, "lag": val_lag})
 
-            # ترتيب طوبولوجي للتحقق من عدم وجود دائرة مغلقة (Cycle Detection)
             adj = {u: [] for u in nodes}
             in_deg = {u: 0 for u in nodes}
             for e in edges:
@@ -688,7 +683,7 @@ with col_display:
                 st.error("❌ يوجد مسار دائري مغلق (Cycle) في العلاقات بين الأنشطة! يرجى مراجعة المدخلات.")
                 st.stop()
 
-            # 1. حساب التمرير الأمامي (Forward Pass: ES & EF) مع دعم كافة أنواع الـ Lags
+            # 1. حساب التمرير الأمامي (Forward Pass)
             ES = {u: 0.0 for u in nodes}
             EF = {u: duration[u] for u in nodes}
             
@@ -697,8 +692,7 @@ with col_display:
                     for e in edges:
                         if e["u"] == u:
                             v = e["v"]
-                            l_type = e["type"]
-                            lag = e["lag"]
+                            l_type, lag = e["type"], e["lag"]
                             if l_type == "FS":
                                 cand_es = EF[u] + lag
                             elif l_type == "SS":
@@ -716,7 +710,7 @@ with col_display:
 
             project_duration = max(EF.values()) if EF else 0.0
 
-            # 2. حساب التمرير الخلفي (Backward Pass: LF & LS)
+            # 2. حساب التمرير الخلفي (Backward Pass)
             LF = {u: project_duration for u in nodes}
             LS = {u: project_duration - duration[u] for u in nodes}
 
@@ -725,8 +719,7 @@ with col_display:
                     for e in edges:
                         if e["u"] == u:
                             v = e["v"]
-                            l_type = e["type"]
-                            lag = e["lag"]
+                            l_type, lag = e["type"], e["lag"]
                             if l_type == "FS":
                                 cand_lf = LS[v] - lag
                             elif l_type == "SS":
@@ -742,7 +735,7 @@ with col_display:
                                 LF[u] = cand_lf
                                 LS[u] = LF[u] - duration[u]
 
-            # 3. حساب السماح الكلي والحر (Total Slack, Start Slack, Finish Slack & Free Float)
+            # 3. حساب السماح الكلي والحر (Slack / Float)
             start_slack = {u: LS[u] - ES[u] for u in nodes}
             finish_slack = {u: LF[u] - EF[u] for u in nodes}
             free_slack = {}
@@ -770,7 +763,6 @@ with col_display:
                             min_excess = excess
                     free_slack[u] = max(0.0, min_excess)
 
-            # تحديد الأنشطة الحرجة والمسار الحرج
             crit_nodes = [u for u in topo_order if abs(start_slack[u]) < 1e-6 or abs(finish_slack[u]) < 1e-6]
             partial_crit = [u for u in topo_order if (abs(start_slack[u]) < 1e-6) != (abs(finish_slack[u]) < 1e-6)]
             crit_path_str = " ➔ ".join(crit_nodes)
@@ -782,12 +774,48 @@ with col_display:
             with c_res1:
                 st.markdown(f"<div class='result-card exact-card'><div class='card-title'>⏱️ إجمالي زمن المشروع (Total Project Time)</div><div class='card-value exact-value'>{project_duration:g} يوم / وحدة زمن</div></div>", unsafe_allow_html=True)
             with c_res2:
-                st.markdown(f"<div class='result-card'><div class='card-title'>🔥 المسار الحرج (Critical Path)</div><div class='card-value' style='font-size:22px;'>{crit_path_str}</div><div class='card-subtext'>الأنشطة الحرجة لا تقبل أي تأخير (Slack = 0)</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='result-card'><div class='card-title'>🔥 المسار الحرج (Critical Path)</div><div class='card-value' style='font-size:22px;'>{crit_path_str}</div><div class='card-subtext'>الأنشطة الحرجة باللون الأحمر (Slack = 0)</div></div>", unsafe_allow_html=True)
 
             if partial_crit:
                 st.warning(f"📌 **ملاحظة خاصة بشبكات الـ Lag (سؤال Example 6.20):** الأنشطة التي تقع بدايتها فقط أو نهايتها فقط على المسار الحرج هي: **{', '.join(partial_crit)}**")
 
-            # بناء جدول النتائج الشامل
+            # بناء عقد وأسهم AOA في حال اختيار AOA
+            preds_map = {u: sorted([e["u"] for e in edges if e["v"] == u]) for u in nodes}
+            succs_map = {u: sorted([e["v"] for e in edges if e["u"] == u]) for u in nodes}
+            aoa_act_edges = {}
+            aoa_dummies = []
+            aoa_events = {}
+            
+            # خوارزمية بناء دوائر أحداث AOA (Event Nodes)
+            event_counter = 1
+            start_evt = 1
+            aoa_events[start_evt] = {"E": 0.0, "L": 0.0}
+            pred_set_to_event = {(): start_evt}
+            act_end_event = {}
+
+            for u in topo_order:
+                p_tuple = tuple(preds_map[u])
+                if not p_tuple:
+                    u_start_evt = start_evt
+                elif len(p_tuple) == 1:
+                    u_start_evt = act_end_event[p_tuple[0]]
+                else:
+                    if p_tuple in pred_set_to_event:
+                        u_start_evt = pred_set_to_event[p_tuple]
+                    else:
+                        event_counter += 1
+                        u_start_evt = event_counter
+                        pred_set_to_event[p_tuple] = u_start_evt
+                        for p_act in p_tuple:
+                            aoa_dummies.append((act_end_event[p_act], u_start_evt, p_act))
+                
+                event_counter += 1
+                u_end_evt = event_counter
+                act_end_event[u] = u_end_evt
+                aoa_act_edges[u] = (u_start_evt, u_end_evt)
+                aoa_events[u_start_evt] = {"E": ES[u], "L": LS[u]}
+                aoa_events[u_end_evt] = {"E": EF[u], "L": LF[u]}
+
             sched_rows = []
             for idx, u in enumerate(nodes):
                 is_c = (abs(start_slack[u]) < 1e-6 and abs(finish_slack[u]) < 1e-6)
@@ -802,10 +830,11 @@ with col_display:
                     "سماح البداية (Start SL)": f"{start_slack[u]:g}",
                     "سماح النهاية (Finish SL)": f"{finish_slack[u]:g}",
                     "السماح الحر (Free Float)": f"{free_slack[u]:g}",
-                    "الحالة (Critical?)": "🔥 حرج كلياً" if is_c else ("⚡ حرج جزئياً (Start/Finish)" if is_p else "عادي")
+                    "الحالة (Critical?)": "🔥 حرج كلياً" if is_c else ("⚡ حرج جزئياً" if is_p else "عادي")
                 }
                 if "AOA" in net_type:
-                    row_dict["تمثيل السهم (AOA i ➔ j)"] = f"Event ({idx+1}) ➔ Event ({idx+2})"
+                    ev_i, ev_j = aoa_act_edges[u]
+                    row_dict["سهم الحدث (AOA Event i ➔ j)"] = f"({ev_i}) ➔ ({ev_j})"
                 sched_rows.append(row_dict)
 
             df_sched = pd.DataFrame(sched_rows)
@@ -815,10 +844,11 @@ with col_display:
             csv_net = df_sched.to_csv(index=False).encode('utf-8-sig')
             st.download_button("📥 تحميل جدول المسار الحرج كملف إكسيل (CSV)", data=csv_net, file_name='cpm_network_schedule.csv', mime='text/csv', use_container_width=True)
 
-            # الرسم التفاعلي للشبكة (Interactive Network Diagram)
-            st.markdown(f"### 🎨 المخطط الشبكي التفاعلي ({net_type}):")
+            # =====================================================================
+            # الرسم التفاعلي للشبكة (مستطيلات لـ AON/Lags ودوائر لـ AOA مع خط أسود واضح)
+            # =====================================================================
+            st.markdown(f"### 🎨 المخطط الشبكي الهندسي ({net_type}):")
             
-            # حساب مستويات الأنشطة (Levels) لترتيب الرسم من اليسار لليمين
             level = {u: 0 for u in nodes}
             for u in topo_order:
                 for e in edges:
@@ -829,72 +859,234 @@ with col_display:
             for u, lv in level.items():
                 levels_map.setdefault(lv, []).append(u)
 
-            pos = {}
-            for lv, u_list in levels_map.items():
-                k = len(u_list)
-                for idx_u, u in enumerate(u_list):
-                    pos[u] = (lv * 3.0, (k - 1) / 2.0 - idx_u * 1.5)
+            max_lv = max(levels_map.keys()) if levels_map else 0
+            max_in_col = max(len(ulist) for ulist in levels_map.values()) if levels_map else 1
 
             fig_net = go.Figure()
 
-            # رسم الأسهم والعلاقات
-            for e in edges:
-                u, v = e["u"], e["v"]
-                x0_p, y0_p = pos[u]
-                x1_p, y1_p = pos[v]
-                is_crit_edge = (u in crit_nodes and v in crit_nodes)
-                line_col = '#dc3545' if is_crit_edge else '#6c757d'
-                line_w = 3.5 if is_crit_edge else 1.8
+            # -----------------------------------------------------------------
+            # الحالة الأولى: رسم دوائر وأسهم حقيقية عند اختيار AOA
+            # -----------------------------------------------------------------
+            if "AOA" in net_type:
+                st.caption("🔵 **تمثيل AOA:** الدوائر تمثل الأحداث (Events)، والأسهم يكتب عليها اسم النشاط وزمنه مثل `A (10)`، والأسهم المنقطة تمثل الأنشطة الوهمية (Dummy).")
                 
-                fig_net.add_trace(go.Scatter(
-                    x=[x0_p, x1_p], y=[y0_p, y1_p],
-                    mode='lines',
-                    line=dict(color=line_col, width=line_w),
-                    hoverinfo='none',
-                    showlegend=False
-                ))
-                
-                # كتابة نوع الـ Lag أو السهم في المنتصف
-                mid_x, mid_y = (x0_p + x1_p) / 2.0, (y0_p + y1_p) / 2.0
-                lbl_edge = f"{e['type']} + {e['lag']:g}" if (e['type'] != 'FS' or e['lag'] != 0) else ("AOA: " + u if "AOA" in net_type else "")
-                if lbl_edge:
+                # تحديد إحداثيات كل دائرة حدث (Event Circle)
+                evt_level = {1: 0}
+                for u in topo_order:
+                    ev_i, ev_j = aoa_act_edges[u]
+                    evt_level[ev_i] = max(evt_level.get(ev_i, 0), level[u])
+                    evt_level[ev_j] = max(evt_level.get(ev_j, 0), level[u] + 1)
+                for d_i, d_j, _ in aoa_dummies:
+                    evt_level[d_j] = max(evt_level.get(d_j, 0), evt_level.get(d_i, 0) + 1)
+
+                evt_groups = {}
+                for ev_id, lv in evt_level.items():
+                    evt_groups.setdefault(lv, []).append(ev_id)
+
+                evt_pos = {}
+                dx_aoa, dy_aoa = 4.5, 3.2
+                for lv, ev_list in evt_groups.items():
+                    k = len(ev_list)
+                    for idx_e, ev_id in enumerate(ev_list):
+                        evt_pos[ev_id] = (lv * dx_aoa, ((k - 1) / 2.0 - idx_e) * dy_aoa)
+
+                # 1. رسم أسهم الأنشطة الحقيقية بين الدوائر
+                for u in nodes:
+                    ev_i, ev_j = aoa_act_edges[u]
+                    x0_p, y0_p = evt_pos[ev_i]
+                    x1_p, y1_p = evt_pos[ev_j]
+                    is_c = (u in crit_nodes)
+                    col_arrow = '#d90429' if is_c else '#1d3557'
+                    
+                    # سهم متجه من الدائرة i إلى الدائرة j
                     fig_net.add_annotation(
-                        x=mid_x, y=mid_y + 0.15,
-                        text=f"<b>{lbl_edge}</b>",
+                        x=x1_p, y=y1_p, ax=x0_p, ay=y0_p,
+                        xref='x', yref='y', axref='x', ayref='y',
+                        text="", showarrow=True,
+                        arrowhead=3, arrowsize=1.4, arrowwidth=3.2 if is_c else 2.0,
+                        arrowcolor=col_arrow, standoff=24, startstandoff=24
+                    )
+                    
+                    # صندوق صغير فوق السهم يوضح اسم النشاط والزمن بخط أسود واضح
+                    mx, my = (x0_p + x1_p) / 2.0, (y0_p + y1_p) / 2.0
+                    fig_net.add_annotation(
+                        x=mx, y=my + 0.32,
+                        text=f"<b>{u} ({duration[u]:g})</b><br><span style='font-size:10px'>[{ES[u]:g} ➔ {EF[u]:g}]</span>",
                         showarrow=False,
-                        font=dict(size=11, color='#d63384'),
-                        bgcolor="rgba(255,255,255,0.85)"
+                        font=dict(size=12, color='#000000', family='Arial'),
+                        bgcolor='#ffccd5' if is_c else '#e0fbfc',
+                        bordercolor=col_arrow, borderwidth=1.5, borderpad=3
                     )
 
-            # رسم عقد الأنشطة (Nodes) بنفس تفاصيل صندوق المحاضرة (ES, ID, EF / SL, DUR, LF)
-            node_x = [pos[u][0] for u in nodes]
-            node_y = [pos[u][1] for u in nodes]
-            node_colors = ['#ffe3e3' if u in crit_nodes else '#e7f1ff' for u in nodes]
-            border_colors = ['#dc3545' if u in crit_nodes else '#007bff' for u in nodes]
-            node_texts = [
-                f"<b>[{u}] (t={duration[u]:g})</b><br>ES:{ES[u]:g} | EF:{EF[u]:g}<br>LS:{LS[u]:g} | LF:{LF[u]:g}<br>SL:{start_slack[u]:g}"
-                for u in nodes
-            ]
+                # 2. رسم أسهم الأنشطة الوهمية (Dummy Activities) بخط متقطع
+                for d_i, d_j, p_act in aoa_dummies:
+                    x0_p, y0_p = evt_pos[d_i]
+                    x1_p, y1_p = evt_pos[d_j]
+                    fig_net.add_trace(go.Scatter(
+                        x=[x0_p, x1_p], y=[y0_p, y1_p],
+                        mode='lines',
+                        line=dict(color='#6c757d', width=1.8, dash='dot'),
+                        hoverinfo='none', showlegend=False
+                    ))
+                    fig_net.add_annotation(
+                        x=(x0_p + x1_p)/2.0, y=(y0_p + y1_p)/2.0,
+                        text="<b>Dummy (0)</b>", showarrow=False,
+                        font=dict(size=10, color='#000000'),
+                        bgcolor='#f8f9fa', bordercolor='#adb5bd', borderwidth=1
+                    )
 
-            fig_net.add_trace(go.Scatter(
-                x=node_x, y=node_y,
-                mode='markers+text',
-                text=node_texts,
-                textposition="middle center",
-                marker=dict(size=68, color=node_colors, symbol='square', line=dict(color=border_colors, width=3)),
-                hoverinfo='text',
-                showlegend=False
-            ))
+                # 3. رسم دوائر الأحداث (Circles) بخط أسود واضح جداً
+                ev_ids = sorted(evt_pos.keys())
+                ev_x = [evt_pos[e_id][0] for e_id in ev_ids]
+                ev_y = [evt_pos[e_id][1] for e_id in ev_ids]
+                ev_texts = [
+                    f"<b>Event {e_id}</b><br>E:{aoa_events[e_id]['E']:g} | L:{aoa_events[e_id]['L']:g}"
+                    for e_id in ev_ids
+                ]
+                
+                fig_net.add_trace(go.Scatter(
+                    x=ev_x, y=ev_y,
+                    mode='markers+text',
+                    text=ev_texts,
+                    textposition="middle center",
+                    textfont=dict(size=11, color='#000000', family='Arial Black'),
+                    marker=dict(
+                        size=56,
+                        color='#fff3b0',
+                        symbol='circle',
+                        line=dict(color='#e09f3e', width=3.5)
+                    ),
+                    hoverinfo='text',
+                    showlegend=False
+                ))
 
-            fig_net.update_layout(
-                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                plot_bgcolor='white',
-                height=520,
-                margin=dict(l=20, r=20, t=30, b=20)
-            )
+                fig_net.update_layout(
+                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-2, (max(evt_groups.keys()) + 1) * dx_aoa]),
+                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    plot_bgcolor='#ffffff',
+                    paper_bgcolor='#ffffff',
+                    height=max(520, max_in_col * 140),
+                    margin=dict(l=20, r=20, t=20, b=20)
+                )
+
+            # -----------------------------------------------------------------
+            # الحالة الثانية: رسم مستطيلات هندسية حقيقية لـ AON و Network Lags
+            # -----------------------------------------------------------------
+            else:
+                st.caption("🟥 **تمثيل AON & Lags:** كل نشاط يُرسم كمستطيل مقسم داخلياً (الأحمر = نشاط حرج على المسار الحرج، الأزرق = نشاط غير حرج به وقت سماح Slack).")
+                
+                dx_aon, dy_aon = 4.6, 2.8
+                box_w, box_h = 1.45, 0.85 # نصف عرض ونصف ارتفاع المستطيل
+                
+                pos = {}
+                for lv, u_list in levels_map.items():
+                    k = len(u_list)
+                    for idx_u, u in enumerate(u_list):
+                        pos[u] = (lv * dx_aon, ((k - 1) / 2.0 - idx_u) * dy_aon)
+
+                # 1. رسم الأسهم الخارجة من يمين المستطيل الأول إلى يسار المستطيل الثاني
+                for e in edges:
+                    u, v = e["u"], e["v"]
+                    x0_p, y0_p = pos[u]
+                    x1_p, y1_p = pos[v]
+                    is_crit_edge = (u in crit_nodes and v in crit_nodes)
+                    line_col = '#d90429' if is_crit_edge else '#495057'
+                    
+                    start_x = x0_p + box_w
+                    end_x = x1_p - box_w
+                    
+                    fig_net.add_annotation(
+                        x=end_x, y=y1_p, ax=start_x, ay=y0_p,
+                        xref='x', yref='y', axref='x', ayref='y',
+                        text="", showarrow=True,
+                        arrowhead=2, arrowsize=1.3, arrowwidth=3.0 if is_crit_edge else 1.8,
+                        arrowcolor=line_col
+                    )
+                    
+                    # إذا كان هناك Lag نكتبه في بطاقة واضحة على السهم
+                    if e["type"] != "FS" or e["lag"] != 0:
+                        mx, my = (start_x + end_x) / 2.0, (y0_p + y1_p) / 2.0
+                        fig_net.add_annotation(
+                            x=mx, y=my + 0.25,
+                            text=f"<b>{e['type']} = {e['lag']:g}</b>",
+                            showarrow=False,
+                            font=dict(size=11, color='#000000', family='Arial'),
+                            bgcolor='#ffc6ff', bordercolor='#9d4edd', borderwidth=1.5, borderpad=2
+                        )
+
+                # 2. رسم المستطيلات الحقيقية (Rectangles) والخطوط الداخلية والنص الأسود الواضح
+                for u in nodes:
+                    cx, cy = pos[u]
+                    is_c = (u in crit_nodes)
+                    fill_col = '#ffccd5' if is_c else '#dbeafe'
+                    border_col = '#d90429' if is_c else '#1d4ed8'
+                    
+                    # إطار المستطيل الخارجي للنشاط
+                    fig_net.add_shape(
+                        type="rect",
+                        x0=cx - box_w, y0=cy - box_h,
+                        x1=cx + box_w, y1=cy + box_h,
+                        line=dict(color=border_col, width=3 if is_c else 2),
+                        fillcolor=fill_col,
+                        layer="below"
+                    )
+                    # خطوط تقسيم داخلية أفقية داخل المستطيل (مثل جدول المحاضرة)
+                    fig_net.add_shape(
+                        type="line",
+                        x0=cx - box_w, y0=cy + box_h*0.33,
+                        x1=cx + box_w, y1=cy + box_h*0.33,
+                        line=dict(color=border_col, width=1),
+                        layer="below"
+                    )
+                    fig_net.add_shape(
+                        type="line",
+                        x0=cx - box_w, y0=cy - box_h*0.33,
+                        x1=cx + box_w, y1=cy - box_h*0.33,
+                        line=dict(color=border_col, width=1),
+                        layer="below"
+                    )
+                    
+                    # النص داخل المستطيل بلون أسود صريح (#000000) لا يتأثر بالـ Dark Mode
+                    box_label = (
+                        f"<b>ES:{ES[u]:g} | [{u}] | EF:{EF[u]:g}</b><br>"
+                        f"SL:{start_slack[u]:g} | <b>Dur:{duration[u]:g}</b> | SL:{finish_slack[u]:g}<br>"
+                        f"LS:{LS[u]:g} | Free:{free_slack[u]:g} | LF:{LF[u]:g}"
+                    )
+                    fig_net.add_annotation(
+                        x=cx, y=cy,
+                        text=box_label,
+                        showarrow=False,
+                        font=dict(size=11, color='#000000', family='Consolas, monospace'),
+                        align="center"
+                    )
+
+                # إضافة أثر شفاف لتفعيل خاصية الـ Hover والـ Zoom بسلاسة
+                fig_net.add_trace(go.Scatter(
+                    x=[pos[u][0] for u in nodes],
+                    y=[pos[u][1] for u in nodes],
+                    mode='markers',
+                    marker=dict(size=10, opacity=0),
+                    text=[f"النشاط {u}: الزمن={duration[u]:g}, المسار={'حرج' if u in crit_nodes else 'عادي'}" for u in nodes],
+                    hoverinfo='text',
+                    showlegend=False
+                ))
+
+                fig_net.update_layout(
+                    xaxis=dict(
+                        showgrid=False, zeroline=False, showticklabels=False,
+                        range=[-box_w - 0.8, max_lv * dx_aon + box_w + 0.8]
+                    ),
+                    yaxis=dict(
+                        showgrid=False, zeroline=False, showticklabels=False,
+                        range=[-(max_in_col * dy_aon)/2.0 - box_h - 0.6, (max_in_col * dy_aon)/2.0 + box_h + 0.6]
+                    ),
+                    plot_bgcolor='#ffffff',
+                    paper_bgcolor='#ffffff',
+                    height=max(540, max_in_col * 145),
+                    margin=dict(l=15, r=15, t=20, b=20)
+                )
+
             st.plotly_chart(fig_net, use_container_width=True)
-
             st.session_state.history.append(f"🕸️ **شبكة ({net_type.split('(')[0]}):** الزمن `{project_duration:g}` | المسار `{crit_path_str}`")
 
         # =========================================================================
