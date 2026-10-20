@@ -1,7 +1,9 @@
 streamlit
+google-generativeai
 numpy
 sympy
-matplotlib
 scipy
-plotly
 pandas
+matplotlib
+pillow
+opencv-python-headless
