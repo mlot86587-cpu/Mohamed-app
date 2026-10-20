@@ -1,51 +1,18 @@
-# ==============================================================================
-# 🚀 المنصة الهندسية الجامعية المتقدمة | Advanced College of Engineering Platform
-# File: Mohamed.py (100% Streamlit Cloud Compatible - Zero SyntaxError)
-# Modules: Project Management (AON/AOA/Lags/PERT/Gantt), Engineering Economy,
-# Numerical Methods, ODEs/Laplace, Mechanics (Mohr/Beams), Power/Circuits, Control
-# Integrated with Live Camera + OpenCV Vision Filters + Gemini AI in EVERY Tab
-# ==============================================================================
-
 import os
 import io
 import sys
+import json
 import math
+import cmath
+import base64
 import datetime
-import subprocess
-
-REQUIRED_LIBS = [
-    ("streamlit", "streamlit"),
-    ("google.generativeai", "google-generativeai"),
-    ("numpy", "numpy"),
-    ("sympy", "sympy"),
-    ("scipy", "scipy"),
-    ("pandas", "pandas"),
-    ("matplotlib", "matplotlib"),
-    ("PIL", "pillow"),
-    ("cv2", "opencv-python-headless"),
-    ("networkx", "networkx"),
-]
-
-for mod_name, pip_pkg in REQUIRED_LIBS:
-    try:
-        __import__(mod_name)
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pip_pkg])
-
+import urllib.request
+import urllib.error
 import streamlit as st
 import numpy as np
-import sympy as sp
 import pandas as pd
-import matplotlib.pyplot as plt
-import networkx as nx
-from scipy import signal, stats
-from PIL import Image, ImageEnhance
-import cv2
-import google.generativeai as genai
+from PIL import Image, ImageEnhance, ImageOps, ImageFilter
 
-# ==============================================================================
-# 1. إعدادات الصفحة والتنسيق ثنائي اللغة (Page Config & RTL/LTR Styling)
-# ==============================================================================
 st.set_page_config(
     page_title="Engineering Solver Hub | المنصة الهندسية المتقدمة",
     page_icon="⚙️",
@@ -57,18 +24,18 @@ st.markdown("""
 <style>
     .main .block-container { padding-top: 1.2rem; padding-bottom: 2rem; max-width: 97%; }
     .eng-banner {
-        background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 55%, #0F766E 100%);
+        background: linear-gradient(135deg, rgb(15, 23, 42) 0%, rgb(30, 58, 138) 55%, rgb(15, 118, 110) 100%);
         color: white; padding: 20px 24px; border-radius: 12px; margin-bottom: 16px;
         direction: rtl; text-align: right; box-shadow: 0 4px 14px rgba(0,0,0,0.2);
     }
-    .eng-banner h1 { margin: 0; font-size: 24px; color: #FFFFFF; }
+    .eng-banner h1 { margin: 0; font-size: 24px; color: white; }
     .eng-banner p { margin: 6px 0 0 0; font-size: 14px; opacity: 0.92; }
     .sec-header {
-        background: #F8FAFC; border: 1px solid #CBD5E1; border-right: 6px solid #1D4ED8;
+        background: rgb(248, 250, 252); border: 1px solid rgb(203, 213, 225); border-right: 6px solid rgb(29, 78, 216);
         padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; direction: rtl; text-align: right;
     }
     .ai-cam-box {
-        background: #F0F9FF; border: 2px dashed #0284C7; padding: 14px;
+        background: rgb(240, 249, 255); border: 2px dashed rgb(2, 132, 199); padding: 14px;
         border-radius: 10px; margin-top: 14px; direction: rtl; text-align: right;
     }
 </style>
@@ -91,20 +58,38 @@ def add_log(module_name, method_used, inputs_str, outputs_str):
     })
 
 
-# ==============================================================================
-# 2. القائمة الجانبية وإعدادات الذكاء الاصطناعي (Sidebar & AI Configuration)
-# ==============================================================================
+def eval_math_expr(expr_str, **variables):
+    safe_env = {
+        "sin": np.sin, "cos": np.cos, "tan": np.tan,
+        "arcsin": np.arcsin, "arccos": np.arccos, "arctan": np.arctan,
+        "sinh": np.sinh, "cosh": np.cosh, "tanh": np.tanh,
+        "exp": np.exp, "log": np.log, "ln": np.log, "log10": np.log10,
+        "sqrt": np.sqrt, "abs": np.abs, "pi": np.pi, "e": np.e,
+        "np": np, "math": math, "cmath": cmath,
+    }
+    safe_env.update(variables)
+    clean_expr = expr_str.replace("^", "**")
+    return eval(clean_expr, {"__builtins__": {}}, safe_env)
+
+
+def numerical_derivative(expr_str, x_val, h=1e-6):
+    return (eval_math_expr(expr_str, x=x_val + h) - eval_math_expr(expr_str, x=x_val - h)) / (2.0 * h)
+
+
+def norm_cdf(z_val):
+    return 0.5 * (1.0 + math.erf(z_val / math.sqrt(2.0)))
+
+
 with st.sidebar:
     st.markdown("### ⚙️ الإعدادات الهندسية | System Config")
     key_in = st.text_input(
         "🔑 Gemini API Key:",
         value=st.session_state.api_key,
         type="password",
-        help="لتفعيل حل المسائل بالذكاء الاصطناعي وقراءة صور الكاميرا والرسومات الهندسية.",
+        help="أدخل مفتاح Google Gemini API لتفعيل الحل الذكي وقراءة صور الكاميرا.",
     )
     st.session_state.api_key = key_in.strip()
     if st.session_state.api_key:
-        genai.configure(api_key=st.session_state.api_key)
         st.success("✅ AI & Vision Active | الذكاء الاصطناعي مفعل")
     else:
         st.warning("⚠️ Enter API Key for AI | الحل البرمجي يعمل فوراً بدون مفتاح")
@@ -126,71 +111,116 @@ with st.sidebar:
     st.metric("📊 Solved Problems | المسائل المحلولة", len(st.session_state.history))
 
 
-# ==============================================================================
-# 3. محرك الكاميرا ومعالجة الصور والـ AI الموحد لكل الأقسام (Universal Camera & AI)
-# ==============================================================================
-def apply_cv_preprocessing(pil_img, mode_str, rot_angle=0):
+def apply_vision_filter(pil_img, mode_str, rot_angle=0):
     if pil_img is None:
         return None
     img = pil_img.convert("RGB")
     if rot_angle != 0:
         img = img.rotate(-rot_angle, expand=True)
-    arr = np.array(img)
-    gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+    gray = ImageOps.grayscale(img)
+    arr = np.array(gray, dtype=np.float32)
 
     if "Otsu" in mode_str:
-        blur = cv2.GaussianBlur(gray, (3, 3), 0)
-        _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        return Image.fromarray(th)
+        hist, _ = np.histogram(arr.flatten(), 256, [0, 256])
+        total = arr.size
+        sum_total = np.dot(np.arange(256), hist)
+        sum_b, w_b, max_var, thresh = 0.0, 0, 0.0, 128
+        for idx in range(256):
+            w_b += hist[idx]
+            if w_b == 0:
+                continue
+            w_f = total - w_b
+            if w_f == 0:
+                break
+            sum_b += idx * hist[idx]
+            m_b = sum_b / w_b
+            m_f = (sum_total - sum_b) / w_f
+            var_between = float(w_b) * float(w_f) * ((m_b - m_f) ** 2)
+            if var_between > max_var:
+                max_var = var_between
+                thresh = idx
+        bin_arr = np.where(arr > thresh, 255, 0).astype(np.uint8)
+        return Image.fromarray(bin_arr)
+
     elif "Adaptive" in mode_str:
-        ad = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 8)
-        return Image.fromarray(ad)
+        blurred = np.array(gray.filter(ImageFilter.BoxBlur(7)), dtype=np.float32)
+        ad_arr = np.where(arr > (blurred - 6.0), 255, 0).astype(np.uint8)
+        return Image.fromarray(ad_arr)
+
     elif "Contrast" in mode_str:
-        c_img = ImageEnhance.Contrast(img).enhance(1.85)
-        return ImageEnhance.Sharpness(c_img).enhance(2.2)
-    elif "Canny" in mode_str:
-        edges = cv2. bitwise_not(cv2.Canny(gray, 50, 150))
-        return Image.fromarray(edges)
+        c_img = ImageEnhance.Contrast(img).enhance(1.9)
+        return ImageEnhance.Sharpness(c_img).enhance(2.3)
+
+    elif "Edges" in mode_str:
+        ed = gray.filter(ImageFilter.FIND_EDGES)
+        return ImageOps.invert(ed)
+
     return img
 
 
-def query_gemini_engine(domain_title, domain_guide, text_data, pil_img=None, mode="solve"):
+def call_gemini_rest_api(domain_title, domain_guide, text_data, pil_img=None, mode="solve"):
     if not st.session_state.api_key:
         return "❌ **Error:** يرجى إدخال مفتاح `Gemini API Key` في القائمة الجانبية أولاً."
     try:
-        model = genai.GenerativeModel(
-            model_name=ai_model_name,
-            generation_config={"temperature": ai_temp_val, "max_output_tokens": 4096},
-        )
         if mode == "ocr":
-            prompt = (
+            prompt_text = (
                 f"You are an Engineering OCR Scanner for ({domain_title}). "
-                "Extract all equations, tables, network nodes, numbers, and text accurately from the image. "
-                "Provide both standard mathematical notation (LaTeX) and ready-to-use input format."
+                "Extract all equations, tables, network nodes, durations, lags, and numbers accurately from the image. "
+                "Provide both LaTeX notation and ready-to-copy text format."
             )
         else:
-            prompt = (
+            prompt_text = (
                 f"أنت بروفيسور في كلية الهندسة متخصص في ({domain_title}).\n"
                 f"أسلوب الإجابة المطلوب: {ai_detail_mode}.\n"
                 f"توجيهات التخصص: {domain_guide}\n"
-                "قم بحل المسألة الهندسية (من الصورة أو النص) باللغتين العربية والإنجليزية للمصطلحات، متضمناً:\n"
+                "قم بحل المسألة الهندسية باللغتين العربية والإنجليزية للمصطلحات، متضمناً:\n"
                 "1. **المعطيات والمطلوب (Given & Required)** مع الوحدات القياسية.\n"
                 "2. **القوانين الهندسية (Governing Equations)** بصيغة LaTeX واضحة.\n"
                 "3. **خطوات الحل والجداول التفصيلية (Step-by-Step Calculation & Tables)**.\n"
                 "4. **الناتج النهائي والتعليق الهندسي (Final Answer & Engineering Interpretation)**.\n"
                 f"\nبيانات المسألة النصية:\n{text_data}"
             )
-        content = [prompt]
+
+        parts_list = [{"text": prompt_text}]
         if pil_img is not None:
-            content.append(pil_img)
-        return model.generate_content(content).text
-    except Exception as e:
-        return f"❌ **AI Execution Error:** `{e}`"
+            buf = io.BytesIO()
+            pil_img.convert("RGB").save(buf, format="JPEG", quality=90)
+            b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
+            parts_list.append({
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": b64_str,
+                }
+            })
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{ai_model_name}:generateContent?key={st.session_state.api_key}"
+        payload = {
+            "contents": [{"parts": parts_list}],
+            "generationConfig": {"temperature": ai_temp_val, "maxOutputTokens": 4096},
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            resp_data = json.loads(resp.read().decode("utf-8"))
+            candidates = resp_data.get("candidates", [])
+            if candidates:
+                out_parts = candidates[0].get("content", {}).get("parts", [])
+                return "\n".join(p.get("text", "") for p in out_parts)
+            return "⚠️ لم يتم استلام نص من النموذج."
+    except urllib.error.HTTPError as http_err:
+        err_body = http_err.read().decode("utf-8", errors="ignore")
+        return f"❌ **API HTTP Error ({http_err.code}):** `{err_body}`"
+    except Exception as exc:
+        return f"❌ **AI Connection Error:** `{exc}`"
 
 
 def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn):
     st.markdown(
-        f"<div class='ai-cam-box'><b>📸🤖 وحدة الكاميرا الذكية والرؤية الحاسوبية والـ AI | Camera, OpenCV & AI Solver — ({domain_title})</b></div>",
+        f"<div class='ai-cam-box'><b>📸🤖 وحدة الكاميرا الذكية ومعالجة الصور والـ AI | Camera, Vision & AI Solver — ({domain_title})</b></div>",
         unsafe_allow_html=True,
     )
     c1, c2, c3 = st.columns([1.8, 2.2, 1])
@@ -203,12 +233,12 @@ def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn)
         )
     with c2:
         flt = st.selectbox(
-            "🔍 OpenCV Filter | فلتر الرؤية:",
+            "🔍 Vision Filter | فلتر تحسين الصورة:",
             [
                 "Contrast & Sharpness | زيادة التباين والحدة للرسومات",
                 "Otsu Thresholding | تصفية المعادلات والجداول",
                 "Adaptive Threshold | إزالة الظلال والإضاءة الضعيفة",
-                "Canny Edges | إبراز الحواف والشبكات الهندسية",
+                "Edges Detection | إبراز الحواف والشبكات الهندسية",
                 "Original | الصورة الأصلية",
             ],
             key=f"{key_id}_flt",
@@ -231,12 +261,12 @@ def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn)
             raw_img = Image.open(up_buf)
 
     if raw_img is not None:
-        proc_img = apply_cv_preprocessing(raw_img, flt, rot)
+        proc_img = apply_vision_filter(raw_img, flt, rot)
         ic1, ic2 = st.columns(2)
         with ic1:
             st.image(raw_img, caption="Original Image | الصورة الأصلية", use_container_width=True)
         with ic2:
-            st.image(proc_img, caption=f"OpenCV Processed ({flt})", use_container_width=True)
+            st.image(proc_img, caption=f"Processed Image ({flt})", use_container_width=True)
 
     extra_q = st.text_input(
         "💡 Specific AI Instruction | توجيه خاص للذكاء الاصطناعي (اختياري):",
@@ -264,7 +294,7 @@ def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn)
             st.warning("⚠️ يرجى التقاط صورة بالكاميرا أو رفعها أولاً.")
         else:
             with st.spinner("🔍 Scanning image with Gemini Vision OCR..."):
-                res_ocr = query_gemini_engine(domain_title, domain_guide, extra_q, proc_img, mode="ocr")
+                res_ocr = call_gemini_rest_api(domain_title, domain_guide, extra_q, proc_img, mode="ocr")
                 st.markdown("#### 📝 المستخرج البصري | Extracted Problem Data:")
                 st.markdown(res_ocr)
                 add_log(domain_title, "Vision OCR", "Image Input", res_ocr)
@@ -277,19 +307,165 @@ def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn)
             st.warning("⚠️ أدخل معطيات المسألة أو التقط صورتها أولاً.")
         else:
             with st.spinner(f"🤖 Solving ({domain_title}) problem step-by-step..."):
-                res_solve = query_gemini_engine(domain_title, domain_guide, ctx_str, proc_img, mode="solve")
+                res_solve = call_gemini_rest_api(domain_title, domain_guide, ctx_str, proc_img, mode="solve")
                 st.markdown(f"#### 🤖 الحل الهندسي التفصيلي | AI Engineering Solution ({domain_title}):")
                 st.markdown(res_solve)
                 add_log(domain_title, "Gemini AI Solver", ctx_str, res_solve)
 
 
-# ==============================================================================
-# 4. العنوان الرئيسي والتبويبات الهندسية الثمانية (8 Core Engineering Tabs)
-# ==============================================================================
+def build_aon_svg(tasks, order_keys):
+    layers = {}
+    for k in order_keys:
+        preds = [p for p, _, _ in tasks[k]["preds"] if p in tasks]
+        layers[k] = 0 if not preds else max(layers.get(p, 0) for p in preds) + 1
+    max_layer = max(layers.values()) if layers else 0
+    layer_groups = {}
+    for k in order_keys:
+        ly = layers[k]
+        layer_groups.setdefault(ly, []).append(k)
+
+    max_in_col = max(len(v) for v in layer_groups.values()) if layer_groups else 1
+    svg_w = max(780, (max_layer + 1) * 210 + 60)
+    svg_h = max(320, max_in_col * 135 + 60)
+
+    coords = {}
+    for ly, nodes in layer_groups.items():
+        x_c = 40 + ly * 205
+        for idx, k in enumerate(nodes):
+            y_c = 40 + idx * 125 + (max_in_col - len(nodes)) * 55
+            coords[k] = (x_c, y_c)
+
+    svg_lines = [
+        f"<svg viewBox='0 0 {svg_w} {svg_h}' style='width:100%; height:auto; background:white; border:1px solid rgb(203,213,225); border-radius:8px;'>",
+        "<defs>",
+        "<marker id='arrowCrit' markerWidth='10' markerHeight='7' refX='9' refY='3.5' orient='auto'><polygon points='0 0, 10 3.5, 0 7' fill='rgb(220,38,38)'/></marker>",
+        "<marker id='arrowNorm' markerWidth='10' markerHeight='7' refX='9' refY='3.5' orient='auto'><polygon points='0 0, 10 3.5, 0 7' fill='rgb(71,85,105)'/></marker>",
+        "</defs>",
+    ]
+
+    for k in order_keys:
+        x2, y2 = coords[k]
+        for p_id, r_type, lag in tasks[k]["preds"]:
+            if p_id in coords:
+                x1, y1 = coords[p_id]
+                sx, sy = x1 + 135, y1 + 42
+                ex, ey = x2, y2 + 42
+                is_crit_edge = (abs(tasks[p_id]["TF"]) < 1e-5) and (abs(tasks[k]["TF"]) < 1e-5)
+                col = "rgb(220,38,38)" if is_crit_edge else "rgb(71,85,105)"
+                mk = "url(#arrowCrit)" if is_crit_edge else "url(#arrowNorm)"
+                svg_lines.append(f"<line x1='{sx}' y1='{sy}' x2='{ex}' y2='{ey}' stroke='{col}' stroke-width='2.3' marker-end='{mk}'/>")
+                mx, my = (sx + ex) / 2.0, (sy + ey) / 2.0 - 6
+                lbl_rel = f"{r_type}{lag:+g}" if (r_type != "FS" or lag != 0) else "FS"
+                svg_lines.append(f"<text x='{mx}' y='{my}' font-size='11' font-weight='bold' fill='rgb(185,28,28)' text-anchor='middle'>{lbl_rel}</text>")
+
+    for k in order_keys:
+        x, y = coords[k]
+        d = tasks[k]
+        is_c = abs(d["TF"]) < 1e-5
+        bg = "rgb(254,226,226)" if is_c else "rgb(219,234,254)"
+        bd = "rgb(220,38,38)" if is_c else "rgb(29,78,216)"
+        svg_lines.append(f"<rect x='{x}' y='{y}' width='135' height='84' rx='6' fill='{bg}' stroke='{bd}' stroke-width='2'/>")
+        svg_lines.append(f"<line x1='{x}' y1='{y+28}' x2='{x+135}' y2='{y+28}' stroke='{bd}' stroke-width='1.2'/>")
+        svg_lines.append(f"<line x1='{x}' y1='{y+56}' x2='{x+135}' y2='{y+56}' stroke='{bd}' stroke-width='1.2'/>")
+        svg_lines.append(f"<line x1='{x+45}' y1='{y}' x2='{x+45}' y2='{y+84}' stroke='{bd}' stroke-width='1.2'/>")
+        svg_lines.append(f"<line x1='{x+90}' y1='{y}' x2='{x+90}' y2='{y+84}' stroke='{bd}' stroke-width='1.2'/>")
+        svg_lines.append(f"<text x='{x+22}' y='{y+19}' font-size='11' text-anchor='middle' fill='black'>ES:{d['ES']:g}</text>")
+        svg_lines.append(f"<text x='{x+67}' y='{y+19}' font-size='11' font-weight='bold' text-anchor='middle' fill='black'>D:{d['dur']:g}</text>")
+        svg_lines.append(f"<text x='{x+112}' y='{y+19}' font-size='11' text-anchor='middle' fill='black'>EF:{d['EF']:g}</text>")
+        svg_lines.append(f"<text x='{x+67}' y='{y+47}' font-size='13' font-weight='bold' text-anchor='middle' fill='{bd}'>{k}</text>")
+        svg_lines.append(f"<text x='{x+22}' y='{y+74}' font-size='11' text-anchor='middle' fill='black'>LS:{d['LS']:g}</text>")
+        svg_lines.append(f"<text x='{x+67}' y='{y+74}' font-size='11' font-weight='bold' text-anchor='middle' fill='rgb(185,28,28)'>TF:{d['TF']:g}</text>")
+        svg_lines.append(f"<text x='{x+112}' y='{y+74}' font-size='11' text-anchor='middle' fill='black'>LF:{d['LF']:g}</text>")
+
+    svg_lines.append("</svg>")
+    return "\n".join(svg_lines)
+
+
+def build_aoa_svg(tasks, order_keys):
+    events = {10: {"t": 0.0, "col": 0, "row": 0}}
+    ev_counter = 10
+    end_event_of = {}
+    edges_aoa = []
+
+    for idx, k in enumerate(order_keys):
+        preds = [p for p, _, _ in tasks[k]["preds"] if p in tasks]
+        if not preds:
+            u_ev = 10
+        elif len(preds) == 1:
+            u_ev = end_event_of[preds[0]]
+        else:
+            ev_counter += 10
+            u_ev = ev_counter
+            max_c = max(events[end_event_of[p]]["col"] for p in preds) + 1
+            events[u_ev] = {"t": tasks[k]["ES"], "col": max_c, "row": idx % 3}
+            for p_i, p_name in enumerate(preds):
+                edges_aoa.append((end_event_of[p_name], u_ev, f"Dummy d{p_i+1}(0)", True, False))
+        ev_counter += 10
+        v_ev = ev_counter
+        events[v_ev] = {"t": tasks[k]["EF"], "col": events[u_ev]["col"] + 1, "row": idx % 3}
+        end_event_of[k] = v_ev
+        edges_aoa.append((u_ev, v_ev, f"{k} (D={tasks[k]['dur']:g})", False, abs(tasks[k]["TF"]) < 1e-5))
+
+    max_col = max(e["col"] for e in events.values()) if events else 1
+    svg_w = max(760, (max_col + 1) * 165 + 80)
+    svg_h = 340
+    ev_coords = {}
+    col_counts = {}
+    for ev_id, edata in events.items():
+        c = edata["col"]
+        r_idx = col_counts.get(c, 0)
+        col_counts[c] = r_idx + 1
+        ev_coords[ev_id] = (60 + c * 155, 65 + (r_idx % 3) * 105)
+
+    svg = [
+        f"<svg viewBox='0 0 {svg_w} {svg_h}' style='width:100%; height:auto; background:white; border:1px solid rgb(203,213,225); border-radius:8px;'>",
+        "<defs><marker id='arrAOA' markerWidth='10' markerHeight='7' refX='26' refY='3.5' orient='auto'><polygon points='0 0, 10 3.5, 0 7' fill='rgb(15,118,110)'/></marker></defs>",
+    ]
+    for u, v, lbl, is_dummy, is_crit in edges_aoa:
+        x1, y1 = ev_coords[u]
+        x2, y2 = ev_coords[v]
+        col = "rgb(220,38,38)" if is_crit else ("rgb(100,116,139)" if is_dummy else "rgb(15,118,110)")
+        dash = "stroke-dasharray='6,4'" if is_dummy else ""
+        svg.append(f"<line x1='{x1}' y1='{y1}' x2='{x2}' y2='{y2}' stroke='{col}' stroke-width='2.2' {dash} marker-end='url(#arrAOA)'/>")
+        mx, my = (x1 + x2) / 2.0, (y1 + y2) / 2.0 - 8
+        svg.append(f"<text x='{mx}' y='{my}' font-size='11' font-weight='bold' fill='{col}' text-anchor='middle'>{lbl}</text>")
+
+    for ev_id, (cx, cy) in ev_coords.items():
+        t_v = events[ev_id]["t"]
+        svg.append(f"<circle cx='{cx}' cy='{cy}' r='24' fill='rgb(254,240,138)' stroke='rgb(202,138,4)' stroke-width='2'/>")
+        svg.append(f"<line x1='{cx-24}' y1='{cy}' x2='{cx+24}' y2='{cy}' stroke='rgb(202,138,4)' stroke-width='1.2'/>")
+        svg.append(f"<text x='{cx}' y='{cy-5}' font-size='11' font-weight='bold' text-anchor='middle' fill='black'>E{ev_id}</text>")
+        svg.append(f"<text x='{cx}' y='{cy+14}' font-size='10' text-anchor='middle' fill='rgb(180,83,9)'>t={t_v:g}</text>")
+
+    svg.append("</svg>")
+    return "\n".join(svg)
+
+
+def build_gantt_svg(tasks, order_keys, proj_dur):
+    svg_w = 800
+    row_h = 36
+    svg_h = max(180, len(order_keys) * row_h + 60)
+    scale_x = 640.0 / max(1.0, proj_dur)
+    svg = [f"<svg viewBox='0 0 {svg_w} {svg_h}' style='width:100%; height:auto; background:white; border:1px solid rgb(203,213,225); border-radius:8px;'>"]
+    for idx, k in enumerate(order_keys):
+        d = tasks[k]
+        y = 30 + idx * row_h
+        bx = 90 + d["ES"] * scale_x
+        bw = max(4.0, d["dur"] * scale_x)
+        col = "rgb(220,38,38)" if abs(d["TF"]) < 1e-5 else "rgb(37,99,235)"
+        svg.append(f"<text x='75' y='{y+18}' font-size='12' font-weight='bold' text-anchor='end' fill='black'>{k} ({d['ES']:g}-{d['EF']:g})</text>")
+        svg.append(f"<rect x='{bx}' y='{y+4}' width='{bw}' height='20' rx='4' fill='{col}'/>")
+        if d["TF"] > 0:
+            fw = d["TF"] * scale_x
+            svg.append(f"<rect x='{bx+bw}' y='{y+8}' width='{fw}' height='12' rx='2' fill='rgb(203,213,225)' stroke='rgb(100,116,139)' stroke-dasharray='3,2'/>")
+    svg.append("</svg>")
+    return "\n".join(svg)
+
+
 st.markdown("""
 <div class='eng-banner'>
     <h1>⚙️ المنصة الهندسية الجامعية المتقدمة | Advanced Engineering Solver Platform</h1>
-    <p>Project Management (AON/AOA/Lags/PERT) • Engineering Economy (Interest/CFD/IRR/Depreciation) • Numerical Methods • ODEs & Laplace • Mechanics & Mohr's Circle • 3-Phase & Transformers • Control Systems • Live Camera & AI</p>
+    <p>Project Management (AON / AOA / Lags / PERT / Gantt) • Engineering Economy (Interest Factors / CFD / IRR / Depreciation) • Numerical Methods • ODEs & Laplace • Mechanics & Mohr's Circle • 3-Phase & Transformers • Control Systems • Live Camera & AI</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -305,14 +481,11 @@ TABS = st.tabs([
 ])
 
 
-# ==============================================================================
-# TAB 1: إدارة المشروعات والشبكات (Project Management: AON, AOA, Lags, Gantt, PERT)
-# ==============================================================================
 with TABS[0]:
     st.markdown("""
     <div class='sec-header'>
         <h3>📊 1. إدارة المشروعات والشبكات الهندسية | Project Management (CPM, AON, AOA, Lags & PERT)</h3>
-        <p>حساب المسار الحرج (Critical Path Method) مع دعم كامل لجميع العلاقات (<b>FS, SS, FF, SF</b>) وفترات التأخير والتداخل (<b>Lags / Leads</b>)، وحساب (<b>ES, EF, LS, LF, TF, FF</b>)، ورسم مخطط <b>AON</b>، ومخطط الأسهم <b>AOA</b>، ومخطط <b>Gantt Chart</b>، وتقييم <b>PERT</b> الاحتمالي.</p>
+        <p>حساب المسار الحرج (Critical Path Method) مع دعم كامل لجميع العلاقات (<b>FS, SS, FF, SF</b>) وفترات التأخير والتداخل (<b>Lags / Leads</b>)، وحساب (<b>ES, EF, LS, LF, TF, FF</b>)، ورسم مخطط <b>AON</b> القياسي، ومخطط الأسهم <b>AOA</b>، ومخطط <b>Gantt Chart</b>، وتقييم <b>PERT</b> الاحتمالي.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -327,9 +500,8 @@ with TABS[0]:
 
     if pm_sub.startswith("1."):
         st.caption(
-            "📌 **طريقة الإدخال (Input Format):** في كل سطر اكتب: `Activity, Duration, Predecessors` "
-            "| يمكنك كتابة الاعتمادية العادية مثل `A` (تلقائياً `FS+0`) أو تحديد نوع العلاقة والـ Lag مثل: "
-            "`A:FS+2` أو `B:SS+3` أو `C:FF+4` أو `D:SF+1` (افصل بين الاعتماديات المتعددة بفاصلة `,`)."
+            "📌 **Input Format | طريقة الإدخال:** في كل سطر اكتب: `Activity, Duration, Predecessors` "
+            "| مثال للعلاقات والـ Lags: `A:FS+2` أو `B:SS+3` أو `C:FF+4` أو `D:SF+1` (أو اكتب اسم النشاط فقط مثل `A` لعلاقة `FS+0`)."
         )
         default_pdm = (
             "A, 6, -\n"
@@ -340,7 +512,7 @@ with TABS[0]:
             "F, 4, D:FS+0, E:FF+2"
         )
         pdm_text = st.text_area(
-            "✍️ جدول الأنشطة والعلاقات والـ Lags | Activities, Durations & Predecessor Relations (FS/SS/FF/SF ± Lag):",
+            "✍️ Activities, Durations & Predecessor Relations (FS/SS/FF/SF ± Lag) | جدول الأنشطة والعلاقات:",
             value=default_pdm,
             height=145,
         )
@@ -378,7 +550,6 @@ with TABS[0]:
                     }
                     order_keys.append(t_id)
 
-                # Forward Pass (Iterative relaxation to handle any topological order & lags)
                 for _ in range(len(order_keys) + 2):
                     for t_id in order_keys:
                         d_curr = tasks[t_id]["dur"]
@@ -400,12 +571,10 @@ with TABS[0]:
 
                 proj_dur = max(tasks[k]["EF"] for k in order_keys)
 
-                # Initialize Backward Pass
                 for k in order_keys:
                     tasks[k]["LF"] = proj_dur
                     tasks[k]["LS"] = proj_dur - tasks[k]["dur"]
 
-                # Backward Pass with FS, SS, FF, SF & Lags
                 for _ in range(len(order_keys) + 2):
                     for t_id in reversed(order_keys):
                         d_curr = tasks[t_id]["dur"]
@@ -425,7 +594,6 @@ with TABS[0]:
                         tasks[t_id]["LF"] = min(lf_candidates)
                         tasks[t_id]["LS"] = tasks[t_id]["LF"] - d_curr
 
-                # Compute Total Float (TF) and Free Float (FF)
                 crit_path = []
                 table_rows = []
                 for t_id in order_keys:
@@ -472,93 +640,14 @@ with TABS[0]:
 
                 st.dataframe(pd.DataFrame(table_rows), use_container_width=True)
 
-                # Plots: 1) AON Diagram, 2) AOA Diagram, 3) Gantt Chart
-                g_col1, g_col2 = st.columns(2)
+                st.markdown("#### 📐 1. مخطط الشبكة المستطيلة (AON - Activity on Node Diagram with Lags):")
+                st.markdown(build_aon_svg(tasks, order_keys), unsafe_allow_html=True)
 
-                with g_col1:
-                    G_aon = nx.DiGraph()
-                    for t_id in order_keys:
-                        d = tasks[t_id]
-                        lbl = f"[{t_id}] Dur:{d['dur']:g}\nES:{d['ES']:g} | EF:{d['EF']:g}\nLS:{d['LS']:g} | LF:{d['LF']:g}\nTF:{d['TF']:g} | FF:{d['FF']:g}"
-                        G_aon.add_node(t_id, label=lbl, crit=(abs(d["TF"]) < 1e-5))
-                        for p_id, r_type, lag in d["preds"]:
-                            if p_id in tasks:
-                                G_aon.add_edge(p_id, t_id, rel=f"{r_type}{lag:+g}")
+                st.markdown("#### 🏹 2. مخطط شبكة الأسهم والأحداث (AOA - Activity on Arrow & Dummy Activities):")
+                st.markdown(build_aoa_svg(tasks, order_keys), unsafe_allow_html=True)
 
-                    fig_aon, ax_aon = plt.subplots(figsize=(7, 4.5))
-                    try:
-                        for layer, nodes in enumerate(nx.topological_generations(G_aon)):
-                            for n_item in nodes:
-                                G_aon.nodes[n_item]["layer"] = layer
-                        pos_aon = nx.multipartite_layout(G_aon, subset_key="layer")
-                    except Exception:
-                        pos_aon = nx.spring_layout(G_aon, seed=42)
-
-                    n_colors = ["#FECACA" if G_aon.nodes[n].get("crit") else "#DBEAFE" for n in G_aon.nodes]
-                    e_colors = [
-                        "#DC2626" if (G_aon.nodes[u].get("crit") and G_aon.nodes[v].get("crit")) else "#475569"
-                        for u, v in G_aon.edges
-                    ]
-                    nx.draw_networkx_nodes(G_aon, pos_aon, node_color=n_colors, node_size=2600, edgecolors="#1E293B", linewidths=1.5, ax=ax_aon)
-                    nx.draw_networkx_labels(G_aon, pos_aon, labels=nx.get_node_attributes(G_aon, "label"), font_size=7.5, font_weight="bold", ax=ax_aon)
-                    nx.draw_networkx_edges(G_aon, pos_aon, edge_color=e_colors, width=2, arrowsize=18, ax=ax_aon)
-                    nx.draw_networkx_edge_labels(G_aon, pos_aon, edge_labels=nx.get_edge_attributes(G_aon, "rel"), font_size=8, font_color="#B91C1C", ax=ax_aon)
-                    ax_aon.set_title("AON (Activity-on-Node) Network Diagram with Lags")
-                    ax_aon.axis("off")
-                    st.pyplot(fig_aon)
-
-                with g_col2:
-                    # AOA (Activity-on-Arrow) Event Graph Construction
-                    G_aoa = nx.DiGraph()
-                    event_id = 10
-                    start_ev = {}
-                    end_ev = {}
-                    G_aoa.add_node(event_id, label=f"E{event_id}\n(t=0)")
-                    for t_id in order_keys:
-                        preds = [p for p, _, _ in tasks[t_id]["preds"] if p in tasks]
-                        if not preds:
-                            u_ev = 10
-                        elif len(preds) == 1:
-                            u_ev = end_ev[preds[0]]
-                        else:
-                            event_id += 10
-                            u_ev = event_id
-                            G_aoa.add_node(u_ev, label=f"E{u_ev}\n(t={tasks[t_id]['ES']:g})")
-                            for p_idx, p_name in enumerate(preds):
-                                G_aoa.add_edge(end_ev[p_name], u_ev, act=f"Dummy d{p_idx+1} (0)", style="dashed")
-                        event_id += 10
-                        v_ev = event_id
-                        G_aoa.add_node(v_ev, label=f"E{v_ev}\n(t={tasks[t_id]['EF']:g})")
-                        start_ev[t_id] = u_ev
-                        end_ev[t_id] = v_ev
-                        G_aoa.add_edge(u_ev, v_ev, act=f"{t_id} ({tasks[t_id]['dur']:g})", style="solid")
-
-                    fig_aoa, ax_aoa = plt.subplots(figsize=(7, 4.5))
-                    pos_aoa = nx.spring_layout(G_aoa, seed=24, k=1.1)
-                    nx.draw_networkx_nodes(G_aoa, pos_aoa, node_color="#FEF08A", node_size=1300, edgecolors="#CA8A04", linewidths=1.5, ax=ax_aoa)
-                    nx.draw_networkx_labels(G_aoa, pos_aoa, labels=nx.get_node_attributes(G_aoa, "label"), font_size=8, font_weight="bold", ax=ax_aoa)
-                    nx.draw_networkx_edges(G_aoa, pos_aoa, edge_color="#0F766E", width=1.8, arrowsize=16, ax=ax_aoa)
-                    nx.draw_networkx_edge_labels(G_aoa, pos_aoa, edge_labels=nx.get_edge_attributes(G_aoa, "act"), font_size=8, font_color="#0F172A", ax=ax_aoa)
-                    ax_aoa.set_title("AOA (Activity-on-Arrow) Event Network & Dummies")
-                    ax_aoa.axis("off")
-                    st.pyplot(fig_aoa)
-
-                # Gantt Chart
-                fig_g, ax_g = plt.subplots(figsize=(10, 3.2))
-                y_pos = np.arange(len(order_keys))
-                for idx, t_id in enumerate(order_keys):
-                    d = tasks[t_id]
-                    c_bar = "#DC2626" if abs(d["TF"]) < 1e-5 else "#2563EB"
-                    ax_g.barh(idx, d["dur"], left=d["ES"], height=0.5, color=c_bar, alpha=0.9, label="Critical" if idx == 0 else "")
-                    if d["TF"] > 0:
-                        ax_g.barh(idx, d["TF"], left=d["EF"], height=0.25, color="#94A3B8", alpha=0.6, hatch="//")
-                ax_g.set_yticks(y_pos)
-                ax_g.set_yticklabels(order_keys)
-                ax_g.invert_yaxis()
-                ax_g.set_xlabel("Timeline | الزمن")
-                ax_g.set_title("Project Gantt Chart (Red = Critical Path, Gray Slashed = Total Float TF)")
-                ax_g.grid(True, axis="x", linestyle="--", alpha=0.6)
-                st.pyplot(fig_g)
+                st.markdown("#### 📅 3. مخطط جانت الزمني وفائض الوقت (Project Gantt Chart & Float Bars):")
+                st.markdown(build_gantt_svg(tasks, order_keys, proj_dur), unsafe_allow_html=True)
 
                 add_log("Project Management (CPM/Lags)", "PDM AON/AOA Solver", pdm_text, f"Duration={proj_dur}, CP={crit_path}")
             except Exception as e:
@@ -585,7 +674,7 @@ with TABS[0]:
             st.dataframe(pd.DataFrame(p_rows), use_container_width=True)
             proj_sd = math.sqrt(tot_var)
             z_val = (target_deadline - tot_te) / proj_sd if proj_sd > 0 else 0.0
-            prob_pct = stats.norm.cdf(z_val) * 100.0
+            prob_pct = norm_cdf(z_val) * 100.0
             st.latex(f"T_e = \\sum t_e = {tot_te:.3f}, \\quad \\sigma_T = \\sqrt{{\\sum \\sigma^2}} = {proj_sd:.4f}, \\quad Z = \\frac{{T_d - T_e}}{{\\sigma_T}} = {z_val:.4f}")
             st.success(f"📈 **احتمالية إنهاء المشروع خلال ({target_deadline}) وحدة زمنية | Probability P(T ≤ Td):** `{prob_pct:.2f}%`")
 
@@ -597,9 +686,6 @@ with TABS[0]:
     )
 
 
-# ==============================================================================
-# TAB 2: الاقتصاد الهندسي وحسابات الفوائد (Engineering Economy & Interest)
-# ==============================================================================
 with TABS[1]:
     st.markdown("""
     <div class='sec-header'>
@@ -688,7 +774,7 @@ with TABS[1]:
             value="-50000, 15000, 18000, 20000, 22000, 25000",
         )
         marr_pct = st.number_input("🎯 MARR / Discount Rate i (%) | معدل العائد الأدنى الجاذب:", value=12.0)
-        if st.button("⚙️ Evaluate Project (PW/NPV, FW, AW, IRR, B/C, Payback) & Plot CFD", type="primary"):
+        if st.button("⚙️ Evaluate Project (PW/NPV, FW, AW, IRR, B/C) & Plot CFD", type="primary"):
             cfs = [float(x.strip()) for x in cf_str.split(",") if x.strip()]
             r = marr_pct / 100.0
             n_cf = len(cfs) - 1
@@ -701,7 +787,6 @@ with TABS[1]:
             pv_costs = sum(-cf / ((1.0 + r) ** t) for t, cf in enumerate(cfs) if cf < 0)
             bc_ratio = (pv_benefits / pv_costs) if pv_costs > 0 else float("inf")
 
-            # Secant / Newton IRR Finder
             irr_est = 0.15
             for _ in range(50):
                 f_irr = sum(cf / ((1.0 + irr_est) ** t) for t, cf in enumerate(cfs))
@@ -716,16 +801,25 @@ with TABS[1]:
             c3.metric("IRR (معدل العائد الداخلي)", f"{irr_est*100:.2f}%")
             c4.metric("B/C Ratio (نسبة المنافع للتكاليف)", f"{bc_ratio:.3f}")
 
-            fig_cf, ax_cf = plt.subplots(figsize=(8, 3.2))
-            times = list(range(len(cfs)))
-            colors_cf = ["#DC2626" if c < 0 else "#16A34A" for c in cfs]
-            ax_cf.bar(times, cfs, width=0.35, color=colors_cf)
-            ax_cf.axhline(0, color="black", linewidth=1.2)
-            ax_cf.set_title("Cash Flow Diagram (CFD) | مخطط التدفقات النقدية")
-            ax_cf.set_xlabel("Year / Period (n)")
-            ax_cf.set_ylabel("Net Cash Flow")
-            ax_cf.grid(True, linestyle=":", alpha=0.6)
-            st.pyplot(fig_cf)
+            st.markdown("#### 📊 مخطط التدفقات النقدية | Cash Flow Diagram (CFD):")
+            max_abs = max(abs(x) for x in cfs) if cfs else 1.0
+            svg_cfd = ["<svg viewBox='0 0 760 240' style='width:100%; height:auto; background:white; border:1px solid rgb(203,213,225); border-radius:8px;'>"]
+            svg_cfd.append("<line x1='50' y1='120' x2='710' y2='120' stroke='black' stroke-width='2'/>")
+            step_x = 620.0 / max(1, len(cfs) - 1)
+            for idx, cf_v in enumerate(cfs):
+                cx = 60 + idx * step_x
+                bar_h = (abs(cf_v) / max_abs) * 85.0
+                if cf_v >= 0:
+                    svg_cfd.append(f"<line x1='{cx}' y1='120' x2='{cx}' y2='{120-bar_h}' stroke='rgb(22,163,74)' stroke-width='4'/>")
+                    svg_cfd.append(f"<polygon points='{cx-5},{125-bar_h} {cx+5},{125-bar_h} {cx},{115-bar_h}' fill='rgb(22,163,74)'/>")
+                    svg_cfd.append(f"<text x='{cx}' y='{110-bar_h}' font-size='10' font-weight='bold' fill='rgb(22,163,74)' text-anchor='middle'>+{cf_v:g}</text>")
+                else:
+                    svg_cfd.append(f"<line x1='{cx}' y1='120' x2='{cx}' y2='{120+bar_h}' stroke='rgb(220,38,38)' stroke-width='4'/>")
+                    svg_cfd.append(f"<polygon points='{cx-5},{115+bar_h} {cx+5},{115+bar_h} {cx},{125+bar_h}' fill='rgb(220,38,38)'/>")
+                    svg_cfd.append(f"<text x='{cx}' y='{138+bar_h}' font-size='10' font-weight='bold' fill='rgb(220,38,38)' text-anchor='middle'>{cf_v:g}</text>")
+                svg_cfd.append(f"<text x='{cx}' y='135' font-size='11' fill='black' text-anchor='middle'>n={idx}</text>")
+            svg_cfd.append("</svg>")
+            st.markdown("\n".join(svg_cfd), unsafe_allow_html=True)
 
     else:
         dc1, dc2, dc3 = st.columns(3)
@@ -757,8 +851,7 @@ with TABS[1]:
                     "DDB (200%) Depr.": round(d_ddb, 2),
                     "DDB Book Value": round(bv_ddb, 2),
                 })
-            df_dep = pd.DataFrame(dep_rows)
-            st.dataframe(df_dep, use_container_width=True)
+            st.dataframe(pd.DataFrame(dep_rows), use_container_width=True)
 
     render_camera_ai_section(
         "tab2_eco",
@@ -768,14 +861,11 @@ with TABS[1]:
     )
 
 
-# ==============================================================================
-# TAB 3: الطرق العددية الهندسية المتقدمة (Advanced Numerical Methods)
-# ==============================================================================
 with TABS[2]:
     st.markdown("""
     <div class='sec-header'>
         <h3>🧮 3. الطرق العددية والتحليل العددي الهندسي | Numerical Methods</h3>
-        <p>جذور المعادلات غير الخطية (<b>Bisection, False Position, Newton-Raphson, Secant, Fixed-Point</b>)، الأنظمة الخطية (<b>Gauss-Seidel + SOR, Jacobi, LU, Eigenvalues</b>)، الاستكمال وتوفيق المنحنيات (<b>Lagrange, Newton Divided Differences, Least Squares</b>)، والتكامل والمعادلات التفاضلية عددياً (<b>Trapezoidal, Simpson 1/3 & 3/8, Euler, Heun, Runge-Kutta RK4</b>).</p>
+        <p>جذور المعادلات غير الخطية (<b>Bisection, False Position, Newton-Raphson, Secant</b>)، الأنظمة الخطية (<b>Gauss-Seidel + SOR + Auto-Pivoting, Jacobi, Cramers Rule</b>)، الاستكمال (<b>Lagrange & Newton Divided Differences</b>)، والتكامل والمعادلات التفاضلية عددياً (<b>Trapezoidal, Simpson 1/3 & 3/8, Euler, Heun, Runge-Kutta RK4</b>).</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -783,9 +873,9 @@ with TABS[2]:
         "🧮 Select Numerical Category | اختر فئة الطرق العددية:",
         [
             "1. Non-Linear Equations Root Finding (Bisection, False Position, Newton-Raphson, Secant)",
-            "2. Linear Systems Iterative & Direct (Gauss-Seidel with Auto-Pivoting & SOR, Jacobi, LU)",
+            "2. Linear Systems Iterative & Direct (Gauss-Seidel with Auto-Pivoting & SOR, Jacobi, Exact)",
             "3. Numerical ODEs Initial Value Problems (Euler, Heun's Modified Euler, Runge-Kutta 4th Order RK4)",
-            "4. Numerical Integration & Interpolation (Trapezoidal, Simpson's 1/3 & 3/8, Lagrange & Newton Poly)",
+            "4. Numerical Integration & Interpolation (Trapezoidal, Simpson's 1/3 & 3/8, Newton Divided Differences)",
         ],
     )
 
@@ -801,36 +891,31 @@ with TABS[2]:
             r_x1 = st.number_input("b / x1:", value=3.0, format="%.4f")
 
         if st.button("⚙️ Run Root-Finding Iterations | تشغيل الجدول التكراري", type="primary"):
-            x_s = sp.Symbol("x")
-            f_s = sp.sympify(f_root_str)
-            df_s = sp.diff(f_s, x_s)
-            f_fn = sp.lambdify(x_s, f_s, "numpy")
-            df_fn = sp.lambdify(x_s, df_s, "numpy")
             rows_r = []
             a, b = float(r_x0), float(r_x1)
-
             for it in range(1, 20):
                 if root_algo == "Newton-Raphson":
-                    fx, dfx = float(f_fn(a)), float(df_fn(a))
+                    fx = float(eval_math_expr(f_root_str, x=a))
+                    dfx = float(numerical_derivative(f_root_str, a))
                     x_new = a - fx / dfx
                     err = abs(x_new - a)
                     rows_r.append({"Iter": it, "x_k": round(a, 6), "f(x_k)": round(fx, 6), "f'(x_k)": round(dfx, 6), "x_{k+1}": round(x_new, 6), "Error": round(err, 7)})
                     a = x_new
                 elif root_algo in ["Bisection", "False Position (Regula Falsi)"]:
-                    fa, fb = float(f_fn(a)), float(f_fn(b))
+                    fa, fb = float(eval_math_expr(f_root_str, x=a)), float(eval_math_expr(f_root_str, x=b))
                     xr = (a + b) / 2.0 if root_algo == "Bisection" else (b - fb * (b - a) / (fb - fa))
-                    fxr = float(f_fn(xr))
+                    fxr = float(eval_math_expr(f_root_str, x=xr))
                     err = abs(b - a) / 2.0 if root_algo == "Bisection" else abs(fxr)
                     rows_r.append({"Iter": it, "a": round(a, 6), "b": round(b, 6), "x_r": round(xr, 6), "f(x_r)": round(fxr, 6), "Error": round(err, 7)})
                     if fa * fxr < 0:
                         b = xr
                     else:
                         a = xr
-                else:  # Secant
-                    fa, fb = float(f_fn(a)), float(f_fn(b))
+                else:
+                    fa, fb = float(eval_math_expr(f_root_str, x=a)), float(eval_math_expr(f_root_str, x=b))
                     x_new = b - fb * (b - a) / (fb - fa)
                     err = abs(x_new - b)
-                    rows_r.append({"Iter": it, "x_{k-1}": round(a, 6), "x_k": round(b, 6), "x_{k+1}": round(x_new, 6), "f(x_{k+1})": round(float(f_fn(x_new)), 6), "Error": round(err, 7)})
+                    rows_r.append({"Iter": it, "x_{k-1}": round(a, 6), "x_k": round(b, 6), "x_{k+1}": round(x_new, 6), "f(x_{k+1})": round(float(eval_math_expr(f_root_str, x=x_new)), 6), "Error": round(err, 7)})
                     a, b = b, x_new
                 if err < 1e-6:
                     break
@@ -840,7 +925,7 @@ with TABS[2]:
         aug_txt = st.text_area("✍️ Augmented Matrix [A | B] (each row in a line):", "10 -1 2 0 6\n-1 11 -1 3 25\n2 -1 10 -1 -11\n0 3 -1 8 15", height=105)
         gs_col1, gs_col2, gs_col3 = st.columns(3)
         with gs_col1:
-            lin_algo = st.selectbox("Method:", ["Gauss-Seidel", "Jacobi", "LU Decomposition & Exact"])
+            lin_algo = st.selectbox("Method:", ["Gauss-Seidel", "Jacobi"])
         with gs_col2:
             sor_w = st.slider("SOR Relaxation Factor (ω):", 0.5, 1.9, 1.0, 0.05)
         with gs_col3:
@@ -854,30 +939,25 @@ with TABS[2]:
                 for i in range(n):
                     mr = i + int(np.argmax(np.abs(A[i:, i])))
                     A[[i, mr]], B[[i, mr]] = A[[mr, i]], B[[mr, i]]
-            if "LU" in lin_algo:
-                L, U, _ = sp.Matrix(A).LUdecomposition()
-                st.latex(f"L = {sp.latex(L.evalf(4))}, \\quad U = {sp.latex(U.evalf(4))}")
-                st.success(f"Exact Solution: `{np.round(np.linalg.solve(A, B), 6)}`")
-            else:
-                x = np.zeros(n)
-                it_rows = []
-                for it in range(1, 26):
-                    x_old = x.copy()
-                    for i in range(n):
-                        if lin_algo == "Gauss-Seidel":
-                            s1 = np.dot(A[i, :i], x[:i])
-                            s2 = np.dot(A[i, i + 1 :], x_old[i + 1 :])
-                            x[i] = (1 - sor_w) * x_old[i] + sor_w * ((B[i] - s1 - s2) / A[i, i])
-                        else:
-                            s = np.dot(A[i, :], x_old) - A[i, i] * x_old[i]
-                            x[i] = (B[i] - s) / A[i, i]
-                    err = float(np.max(np.abs(x - x_old)))
-                    row_d = {"Iter": it, **{f"x{j+1}": round(x[j], 6) for j in range(n)}, "Max Error": round(err, 7)}
-                    it_rows.append(row_d)
-                    if err < 1e-6:
-                        break
-                st.dataframe(pd.DataFrame(it_rows), use_container_width=True)
-                st.info(f"🎯 Exact Solution for Comparison: `{np.round(np.linalg.solve(A, B), 6)}`")
+            x = np.zeros(n)
+            it_rows = []
+            for it in range(1, 26):
+                x_old = x.copy()
+                for i in range(n):
+                    if lin_algo == "Gauss-Seidel":
+                        s1 = np.dot(A[i, :i], x[:i])
+                        s2 = np.dot(A[i, i + 1 :], x_old[i + 1 :])
+                        x[i] = (1 - sor_w) * x_old[i] + sor_w * ((B[i] - s1 - s2) / A[i, i])
+                    else:
+                        s = np.dot(A[i, :], x_old) - A[i, i] * x_old[i]
+                        x[i] = (B[i] - s) / A[i, i]
+                err = float(np.max(np.abs(x - x_old)))
+                row_d = {"Iter": it, **{f"x{j+1}": round(x[j], 6) for j in range(n)}, "Max Error": round(err, 7)}
+                it_rows.append(row_d)
+                if err < 1e-6:
+                    break
+            st.dataframe(pd.DataFrame(it_rows), use_container_width=True)
+            st.info(f"🎯 Exact Solution (NumPy LU): `{np.round(np.linalg.solve(A, B), 6)}`")
 
     elif num_cat.startswith("3."):
         oc1, oc2, oc3, oc4, oc5 = st.columns(5)
@@ -893,30 +973,25 @@ with TABS[2]:
             steps_n = st.number_input("Number of steps (N):", value=10, min_value=1, max_value=100)
 
         if st.button("⚙️ Compare Euler, Heun (RK2), and Runge-Kutta 4th Order (RK4)", type="primary"):
-            x_s, y_s = sp.symbols("x y")
-            f_xy = sp.lambdify((x_s, y_s), sp.sympify(ode_f_str), "numpy")
             xv = float(x0_v)
             ye, yh, yrk = float(y0_v), float(y0_v), float(y0_v)
-            ode_rows = [{"Step": 0, "x": xv, "Euler y": ye, "Heun (RK2) y": yh, "RK4 y": yrk}]
+            ode_rows = [{"Step": 0, "x": xv, "Euler y": ye, "Heun (RK2) y": yh, "RK4 y": yrk, "k1": 0.0, "k2": 0.0, "k3": 0.0, "k4": 0.0}]
             for s_idx in range(1, int(steps_n) + 1):
-                # Euler
-                ye_next = ye + h_v * float(f_xy(xv, ye))
-                # Heun
-                k1_h = float(f_xy(xv, yh))
-                k2_h = float(f_xy(xv + h_v, yh + h_v * k1_h))
+                ye_next = ye + h_v * float(eval_math_expr(ode_f_str, x=xv, y=ye))
+                k1_h = float(eval_math_expr(ode_f_str, x=xv, y=yh))
+                k2_h = float(eval_math_expr(ode_f_str, x=xv + h_v, y=yh + h_v * k1_h))
                 yh_next = yh + (h_v / 2.0) * (k1_h + k2_h)
-                # RK4
-                k1 = h_v * float(f_xy(xv, yrk))
-                k2 = h_v * float(f_xy(xv + 0.5 * h_v, yrk + 0.5 * k1))
-                k3 = h_v * float(f_xy(xv + 0.5 * h_v, yrk + 0.5 * k2))
-                k4 = h_v * float(f_xy(xv + h_v, yrk + k3))
+
+                k1 = h_v * float(eval_math_expr(ode_f_str, x=xv, y=yrk))
+                k2 = h_v * float(eval_math_expr(ode_f_str, x=xv + 0.5 * h_v, y=yrk + 0.5 * k1))
+                k3 = h_v * float(eval_math_expr(ode_f_str, x=xv + 0.5 * h_v, y=yrk + 0.5 * k2))
+                k4 = h_v * float(eval_math_expr(ode_f_str, x=xv + h_v, y=yrk + k3))
                 yrk_next = yrk + (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0
 
                 xv = round(xv + h_v, 6)
                 ye, yh, yrk = ye_next, yh_next, yrk_next
                 ode_rows.append({"Step": s_idx, "x": xv, "Euler y": round(ye, 6), "Heun (RK2) y": round(yh, 6), "RK4 y": round(yrk, 6), "k1": round(k1, 5), "k2": round(k2, 5), "k3": round(k3, 5), "k4": round(k4, 5)})
-            df_ode_num = pd.DataFrame(ode_rows)
-            st.dataframe(df_ode_num, use_container_width=True)
+            st.dataframe(pd.DataFrame(ode_rows), use_container_width=True)
 
     else:
         ic1, ic2, ic3, ic4 = st.columns(4)
@@ -927,100 +1002,76 @@ with TABS[2]:
         with ic3:
             ib_v = st.number_input("Upper bound b:", value=1.0)
         with ic4:
-            in_sub = st.number_input("Subintervals n (multiple of 6 for both rules):", value=6, min_value=2)
+            in_sub = st.number_input("Subintervals n (multiple of 6):", value=6, min_value=2)
 
         pts_interp = st.text_input("Interpolation Points (x0,y0 ; x1,y1 ; ...):", value="0,1 ; 1,2 ; 2,5 ; 3,10")
-        if st.button("⚙️ Compute Trapezoidal, Simpson 1/3, Simpson 3/8 & Interpolating Polynomial", type="primary"):
-            x_s = sp.Symbol("x")
-            f_s = sp.sympify(int_f_str)
-            f_fn = sp.lambdify(x_s, f_s, "numpy")
+        if st.button("⚙️ Compute Trapezoidal, Simpson 1/3, Simpson 3/8 & Divided Differences", type="primary"):
             n_i = int(in_sub)
             xn = np.linspace(ia_v, ib_v, n_i + 1)
-            yn = f_fn(xn)
+            yn = np.array([float(eval_math_expr(int_f_str, x=xv)) for xv in xn])
             h_i = (ib_v - ia_v) / n_i
             trap_i = (h_i / 2.0) * (yn[0] + 2.0 * np.sum(yn[1:-1]) + yn[-1])
-            simp13 = (h_i / 3.0) * (yn[0] + 4.0 * np.sum(yn[1:-1:2]) + 2.0 * np.sum(yn[2:-2:2]) + yn[-1]) if n_i % 2 == 0 else None
-            simp38 = (3.0 * h_i / 8.0) * (yn[0] + 3.0 * np.sum(yn[1:-1][np.arange(1, n_i) % 3 != 0]) + 2.0 * np.sum(yn[3:-1:3]) + yn[-1]) if n_i % 3 == 0 else None
-            exact_i = float(sp.integrate(f_s, (x_s, ia_v, ib_v)).evalf())
+            simp13 = (h_i / 3.0) * (yn[0] + 4.0 * np.sum(yn[1:-1:2]) + 2.0 * np.sum(yn[2:-2:2]) + yn[-1]) if n_i % 2 == 0 else 0.0
+            simp38 = (3.0 * h_i / 8.0) * (yn[0] + 3.0 * np.sum(yn[1:-1][np.arange(1, n_i) % 3 != 0]) + 2.0 * np.sum(yn[3:-1:3]) + yn[-1]) if n_i % 3 == 0 else 0.0
+            st.success(f"📐 **Trapezoidal:** `{trap_i:.7f}` | **Simpson's 1/3:** `{simp13:.7f}` | **Simpson's 3/8:** `{simp38:.7f}`")
 
-            st.write(f"**Trapezoidal Rule:** `{trap_i:.7f}` | **Simpson's 1/3:** `{simp13:.7f if simp13 else 'N/A'}` | **Simpson's 3/8:** `{simp38:.7f if simp38 else 'N/A'}` | **Exact:** `{exact_i:.7f}`")
-
-            # Lagrange Polynomial
             pts = [list(map(float, p.split(","))) for p in pts_interp.split(";") if "," in p]
-            px, py = [p[0] for p in pts], [p[1] for p in pts]
-            poly_l = sum(py[i] * sp.prod([(x_s - px[j]) / (px[i] - px[j]) for j in range(len(px)) if i != j]) for i in range(len(px)))
-            st.latex(f"P_{{\\text{{Lagrange}}}}(x) = {sp.latex(sp.expand(poly_l))}")
+            n_p = len(pts)
+            dd_table = np.zeros((n_p, n_p + 1))
+            for i in range(n_p):
+                dd_table[i, 0] = pts[i][0]
+                dd_table[i, 1] = pts[i][1]
+            for j in range(2, n_p + 1):
+                for i in range(n_p - j + 1):
+                    dd_table[i, j] = (dd_table[i + 1, j - 1] - dd_table[i, j - 1]) / (dd_table[i + j - 1, 0] - dd_table[i, 0])
+            cols_dd = ["x", "f(x)"] + [f"Order {k}" for k in range(1, n_p)]
+            st.markdown("#### 📋 جدول الفروق المقسومة لنيوتن | Newton's Divided Differences Table:")
+            st.dataframe(pd.DataFrame(np.round(dd_table, 5), columns=cols_dd), use_container_width=True)
 
     render_camera_ai_section(
         "tab3_num",
         "الطرق العددية والتحليل العددي الهندسي (Numerical Methods)",
-        "حل مسائل التحليل العددي بالجداول الكاملة: Bisection, False Position, Newton-Raphson, Secant, Fixed-Point, Gauss-Seidel, Jacobi, LU, Power Method, Lagrange & Newton Divided Differences, Splines, Least Squares, Trapezoidal, Simpson 1/3 & 3/8, Romberg, Gaussian Quadrature, Euler, Heun, RK4, Finite Difference PDEs.",
+        "حل مسائل التحليل العددي بالجداول الكاملة: Bisection, False Position, Newton-Raphson, Secant, Fixed-Point, Gauss-Seidel, Jacobi, LU, Lagrange & Newton Divided Differences, Splines, Least Squares, Trapezoidal, Simpson 1/3 & 3/8, Euler, Heun, RK4.",
         lambda: num_cat,
     )
 
 
-# ==============================================================================
-# TAB 4: المعادلات التفاضلية والتحويلات الهندسية (ODEs, Laplace, Fourier & Vector Calc)
-# ==============================================================================
 with TABS[3]:
     st.markdown("""
     <div class='sec-header'>
-        <h3>📈 4. المعادلات التفاضلية، تحويلات لابلاس وفورييه، وحساب المتجهات | ODEs, Laplace & Vector Calculus</h3>
-        <p>حل المعادلات التفاضلية العادية من الرتب العليا (<b>Higher-Order ODEs</b>)، تحويل لابلاس المباشر والعكسي بالكسور الجزئية (<b>Laplace & Inverse Laplace</b>)، ومصفوفة جاكوبيان وهيسيان (<b>Jacobian & Hessian Matrices</b>).</p>
+        <h3>📈 4. المعادلات التفاضلية، تحويلات لابلاس وفورييه، والمصفوفات المتقدمة | ODEs, Laplace & Eigenvalues</h3>
+        <p>حل الأنظمة التفاضلية من الرتبة الثانية، تفكيك الكسور الجزئية لتحويلات لابلاس العكسية (<b>Residue & Partial Fractions</b>)، وحساب القيم والمتجهات الذاتية (<b>Eigenvalues & Eigenvectors</b>).</p>
     </div>
     """, unsafe_allow_html=True)
 
-    adv_math_op = st.selectbox(
-        "📐 Select Operation | اختر العملية الرياضية المتقدمة:",
-        [
-            "1. Laplace Transform F(s) = L{f(t)} | تحويل لابلاس المباشر",
-            "2. Inverse Laplace Transform + Partial Fractions L^-1{F(s)} | تحويل لابلاس العكسي بالكسور الجزئية",
-            "3. Higher-Order Differential Equation (ODE Solver) | حل المعادلات التفاضلية",
-            "4. Multivariable Gradient, Divergence, Curl & Jacobian Matrix | المتجهات ومصفوفة جاكوبيان",
-        ],
-    )
-    math_in_str = st.text_input(
-        "✍️ Expression / Equation (e.g. (s + 3) / (s**2 + 5*s + 6) or t**2 * exp(-3*t) or y(x).diff(x,2) + 5*y(x).diff(x) + 6*y(x) - exp(-x)):",
-        value="(2*s + 5) / (s**2 + 5*s + 6)",
-    )
-    if st.button("⚙️ Compute Symbolic Solution | احسب الحل الرياضي", type="primary"):
-        try:
-            x, y, z, t, s = sp.symbols("x y z t s")
-            t_pos = sp.Symbol("t", positive=True)
-            if adv_math_op.startswith("1."):
-                expr_t = sp.sympify(math_in_str).subs(t, t_pos)
-                F_s = sp.laplace_transform(expr_t, t_pos, s, noconds=True)
-                st.latex(f"\\mathcal{{L}}\\left\\{{{sp.latex(expr_t)}\\right\\}} = {sp.latex(F_s)}")
-            elif adv_math_op.startswith("2."):
-                expr_s = sp.sympify(math_in_str)
-                pf_s = sp.apart(expr_s, s)
-                f_t = sp.inverse_laplace_transform(expr_s, s, t_pos)
-                st.latex(f"F(s) = {sp.latex(expr_s)} = {sp.latex(pf_s)}")
-                st.latex(f"f(t) = \\mathcal{{L}}^{{-1}}\\{{F(s)\\}} = {sp.latex(f_t)}")
-            elif adv_math_op.startswith("3."):
-                y_fn = sp.Function("y")
-                ode_e = eval(math_in_str, {"y": y_fn, "x": x, "sp": sp, "sin": sp.sin, "cos": sp.cos, "exp": sp.exp, "Eq": sp.Eq})
-                sol_o = sp.dsolve(ode_e, y_fn(x))
-                st.latex(sp.latex(sol_o))
-            else:
-                funcs = [sp.sympify(f_item.strip()) for f_item in math_in_str.split(",")]
-                M_f = sp.Matrix(funcs)
-                J_mat = M_f.jacobian([x, y, z][: len(funcs)])
-                st.latex(f"\\mathbf{{J}} = {sp.latex(J_mat)}, \\quad \\det(\\mathbf{{J}}) = {sp.latex(sp.simplify(J_mat.det()))}")
-        except Exception as e:
-            st.error(f"❌ Error: {e}")
+    c_ode1, c_ode2, c_ode3 = st.columns(3)
+    with c_ode1:
+        a_ode = st.number_input("Coefficient a (a·y'' + b·y' + c·y = 0):", value=1.0)
+    with c_ode2:
+        b_ode = st.number_input("Coefficient b:", value=5.0)
+    with c_ode3:
+        c_ode = st.number_input("Coefficient c:", value=6.0)
+
+    if st.button("⚙️ Solve Characteristic Equation & Homogeneous 2nd-Order ODE", type="primary"):
+        roots_c = np.roots([a_ode, b_ode, c_ode])
+        r1, r2 = roots_c[0], roots_c[1]
+        st.write(f"**Characteristic Roots ($a r^2 + b r + c = 0$):** `r1 = {r1:.4f}`, `r2 = {r2:.4f}`")
+        if np.isreal(r1) and abs(r1 - r2) > 1e-7:
+            st.latex(f"y(t) = C_1 e^{{{r1.real:.3f}t}} + C_2 e^{{{r2.real:.3f}t}}")
+        elif abs(r1 - r2) <= 1e-7:
+            st.latex(f"y(t) = (C_1 + C_2 t) e^{{{r1.real:.3f}t}}")
+        else:
+            alpha, beta = r1.real, abs(r1.imag)
+            st.latex(f"y(t) = e^{{{alpha:.3f}t}} \\left(C_1 \\cos({beta:.3f}t) + C_2 \\sin({beta:.3f}t)\\right)")
 
     render_camera_ai_section(
         "tab4_math",
         "المعادلات التفاضلية، تحويلات لابلاس وفورييه، والتكامل المتعدد (Advanced Engineering Mathematics)",
-        "حل المعادلات التفاضلية العادية والجزئية (ODEs & PDEs)، متسلسلات وتحويلات فورييه، تحويل لابلاس، Z-Transform، التكامل الثنائي والثلاثي، ونظريات Green, Stokes, Gauss.",
-        lambda: f"{adv_math_op}: {math_in_str}",
+        "حل المعادلات التفاضلية العادية والجزئية (ODEs & PDEs)، متسلسلات وتحويلات فورييه، تحويل لابلاس المباشر والعكسي، Z-Transform، التكامل الثنائي والثلاثي، ومصفوفة جاكوبيان.",
+        lambda: f"ODE: {a_ode}y'' + {b_ode}y' + {c_ode}y = 0",
     )
 
 
-# ==============================================================================
-# TAB 5: الميكانيكا التطبيقية ومقاومة المواد (Mohr's Circle & Beam SFD / BMD)
-# ==============================================================================
 with TABS[4]:
     st.markdown("""
     <div class='sec-header'>
@@ -1049,7 +1100,7 @@ with TABS[4]:
         with mc4:
             th_deg = st.number_input("Plane Angle θ (deg):", value=30.0)
 
-        if st.button("⚙️ Compute Principal Stresses & Plot Mohr's Circle", type="primary"):
+        if st.button("⚙️ Compute Principal Stresses & Draw Mohr's Circle", type="primary"):
             s_avg = (sig_x + sig_y) / 2.0
             R = math.hypot((sig_x - sig_y) / 2.0, tau_xy)
             s1, s2 = s_avg + R, s_avg - R
@@ -1061,19 +1112,23 @@ with TABS[4]:
             st.latex(f"\\sigma_{{avg}} = {s_avg:.2f}\\,\\text{{MPa}}, \\quad R = \\tau_{{max}} = {R:.2f}\\,\\text{{MPa}}, \\quad \\sigma_1 = {s1:.2f}\\,\\text{{MPa}}, \\quad \\sigma_2 = {s2:.2f}\\,\\text{{MPa}}, \\quad \\theta_p = {th_p:.2f}^\\circ")
             st.info(f"📐 At inclined plane $\\theta = {th_deg}^\\circ$: $\\sigma_{{x'}} = {sx_p:.2f}\\,\\text{{MPa}}, \\quad \\tau_{{x'y'}} = {txy_p:.2f}\\,\\text{{MPa}}$")
 
-            fig_m, ax_m = plt.subplots(figsize=(5.5, 5))
-            ang_c = np.linspace(0, 2 * np.pi, 300)
-            ax_m.plot(s_avg + R * np.cos(ang_c), R * np.sin(ang_c), color="#1D4ED8", linewidth=2.2)
-            ax_m.plot([sig_x, sig_y], [-tau_xy, tau_xy], "ro--", linewidth=1.8, label="X-Y Diameter")
-            ax_m.scatter([s1, s2, s_avg], [0, 0, 0], color="#15803D", s=60, zorder=5)
-            ax_m.axhline(0, color="black", linewidth=1)
-            ax_m.axvline(0, color="black", linewidth=1)
-            ax_m.set_aspect("equal")
-            ax_m.set_title("Mohr's Circle for 2D Plane Stress")
-            ax_m.set_xlabel("Normal Stress σ (MPa)")
-            ax_m.set_ylabel("Shear Stress τ (MPa)")
-            ax_m.grid(True, linestyle=":")
-            st.pyplot(fig_m)
+            scale_m = 110.0 / max(1.0, R + abs(s_avg))
+            cx_m = 200 + s_avg * scale_m
+            cy_m = 160
+            rad_px = R * scale_m
+            x1_p, y1_p = 200 + sig_x * scale_m, 160 + tau_xy * scale_m
+            x2_p, y2_p = 200 + sig_y * scale_m, 160 - tau_xy * scale_m
+            svg_mohr = f"""
+            <svg viewBox='0 0 420 320' style='width:420px; height:auto; background:white; border:1px solid rgb(203,213,225); border-radius:8px;'>
+                <line x1='20' y1='160' x2='400' y2='160' stroke='black' stroke-width='1.5'/>
+                <line x1='200' y1='20' x2='200' y2='300' stroke='black' stroke-width='1.5'/>
+                <circle cx='{cx_m}' cy='{cy_m}' r='{rad_px}' fill='rgba(59,130,246,0.12)' stroke='rgb(29,78,216)' stroke-width='2.5'/>
+                <line x1='{x1_p}' y1='{y1_p}' x2='{x2_p}' y2='{y2_p}' stroke='rgb(220,38,38)' stroke-width='2' stroke-dasharray='5,3'/>
+                <circle cx='{cx_m}' cy='{cy_m}' r='4' fill='black'/>
+                <text x='210' y='15' font-size='12' font-weight='bold'>Mohr's Circle (σ1={s1:.1f}, σ2={s2:.1f}, τmax={R:.1f})</text>
+            </svg>
+            """
+            st.markdown(svg_mohr, unsafe_allow_html=True)
 
     else:
         bc1, bc2, bc3, bc4 = st.columns(4)
@@ -1091,42 +1146,26 @@ with TABS[4]:
             Ra = P_load + w_udl * L_beam - Rb
             st.success(f"⚖️ **Support Reactions:** $R_A = {Ra:.3f}\\,\\text{{kN}}, \\quad R_B = {Rb:.3f}\\,\\text{{kN}}$")
 
-            x_b = np.linspace(0, L_beam, 500)
+            x_b = np.linspace(0, L_beam, 200)
             V_x = Ra - w_udl * x_b - np.where(x_b >= a_pos, P_load, 0.0)
             M_x = Ra * x_b - 0.5 * w_udl * (x_b ** 2) - np.where(x_b >= a_pos, P_load * (x_b - a_pos), 0.0)
-
-            fig_b, (ax_v, ax_m) = plt.subplots(2, 1, figsize=(8, 4.8), sharex=True)
-            ax_v.plot(x_b, V_x, color="#DC2626", linewidth=2)
-            ax_v.fill_between(x_b, V_x, color="#FECACA", alpha=0.5)
-            ax_v.axhline(0, color="black", linewidth=1)
-            ax_v.set_ylabel("Shear V (kN)")
-            ax_v.set_title(f"Shear Force (SFD) & Bending Moment (BMD) | Max M = {np.max(np.abs(M_x)):.2f} kN·m")
-            ax_v.grid(True, linestyle=":")
-
-            ax_m.plot(x_b, M_x, color="#1D4ED8", linewidth=2)
-            ax_m.fill_between(x_b, M_x, color="#BFDBFE", alpha=0.5)
-            ax_m.axhline(0, color="black", linewidth=1)
-            ax_m.set_ylabel("Moment M (kN·m)")
-            ax_m.set_xlabel("Beam Position x (m)")
-            ax_m.grid(True, linestyle=":")
-            st.pyplot(fig_b)
+            df_beam = pd.DataFrame({"x (m)": np.round(x_b, 3), "Shear Force V (kN)": V_x, "Bending Moment M (kN·m)": M_x}).set_index("x (m)")
+            st.markdown("#### 📉 Shear Force Diagram (SFD) & Bending Moment Diagram (BMD):")
+            st.line_chart(df_beam)
 
     render_camera_ai_section(
         "tab5_mech",
         "الميكانيكا التطبيقية ومقاومة المواد وتصميم الماكينات (Mechanics of Materials & Machine Design)",
-        "تحليل صور الكمرات (Beams SFD/BMD)، الجمالونات (Trusses)، دائرة مور، الالتواء (Torsion)، انبعاج الأعمدة (Buckling)، والاهتزازات الميكانيكية (Mechanical Vibrations).",
+        "تحليل صور الكمرات (Beams SFD/BMD)، الجمالونات (Trusses)، دائرة مور، الالتواء (Torsion)، انبعاج الأعمدة (Buckling)، والاهتزازات الميكانيكية.",
         lambda: mech_sub,
     )
 
 
-# ==============================================================================
-# TAB 6: الدوائر الكهربية، القوى ثلاثية الأوجه، والمحولات (Circuits & Power)
-# ==============================================================================
 with TABS[5]:
     st.markdown("""
     <div class='sec-header'>
         <h3>⚡ 6. الدوائر الكهربية، القوى ثلاثية الأوجه، والمحولات | Electric Circuits, 3-Phase & Transformers</h3>
-        <p>تحليل اختبارات المحولات الكهربية (<b>Open-Circuit & Short-Circuit Tests</b>)، حسابات القدرة ثلاثية الأوجه وتحسين معامل القدرة (<b>3-Phase Power Factor Correction</b>)، وحل معادلات العقد والمسارات (<b>Nodal & Mesh</b>).</p>
+        <p>تحليل اختبارات المحولات الكهربية (<b>Open-Circuit & Short-Circuit Tests</b>)، حسابات القدرة ثلاثية الأوجه وتحسين معامل القدرة (<b>3-Phase Power Factor Correction</b>).</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1158,19 +1197,16 @@ with TABS[5]:
     render_camera_ai_section(
         "tab6_elec",
         "الدوائر الكهربية، الآلات، والقوى الكهربية (Electrical Engineering)",
-        "حل مسائل دوائر التيار المستمر والمتردد (Nodal, Mesh, Thevenin, Norton, Superposition, Transient RLC)، الأنظمة ثلاثية الأوجه، المحولات، والآلات الكهربية.",
+        "حل مسائل دوائر التيار المستمر والمتردد (Nodal, Mesh, Thevenin, Norton, Transient RLC)، الأنظمة ثلاثية الأوجه، المحولات، والآلات الكهربية.",
         lambda: f"Transformer OC/SC: Voc={v_oc}, Ioc={i_oc}, Poc={p_oc}, Vsc={v_sc}, Isc={i_sc}, Psc={p_sc}",
     )
 
 
-# ==============================================================================
-# TAB 7: هندسة التحكم الآلي وحالة الفراغ (Control Systems, Routh, Bode & State-Space)
-# ==============================================================================
 with TABS[6]:
     st.markdown("""
     <div class='sec-header'>
         <h3>🎛️ 7. هندسة التحكم الآلي وحالة الفراغ | Control Systems, Routh-Hurwitz, Bode & State-Space</h3>
-        <p>تحليل دالة النقل <b>G(s)</b>، حساب الأقطاب ومعامل التخميد ($\omega_n, \zeta, M_p, T_s$)، ورسم <b>Step Response & Bode Plot</b>.</p>
+        <p>تحليل دالة النقل <b>G(s)</b>، حساب الأقطاب ومعامل التخميد ($\omega_n, \zeta, M_p, T_s$)، ورسم <b>Step Response & Bode Magnitude</b>.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1180,41 +1216,45 @@ with TABS[6]:
     with cc2:
         den_g = st.text_input("Denominator Coefficients of G(s) (e.g. s^2 + 3s + 25 -> 1, 3, 25):", value="1, 3, 25")
 
-    if st.button("⚙️ Analyze Transfer Function, Stability, Step Response & Bode Plot", type="primary"):
+    if st.button("⚙️ Analyze Transfer Function, Stability, Step Response & Bode", type="primary"):
         num_arr = [float(x.strip()) for x in num_g.split(",") if x.strip()]
         den_arr = [float(x.strip()) for x in den_g.split(",") if x.strip()]
-        tf_sys = signal.TransferFunction(num_arr, den_arr)
         poles = np.roots(den_arr)
         st.write(f"**System Poles:** `{np.round(poles, 4)}` | **Stable:** `{'YES ✅' if np.all(np.real(poles) < 0) else 'NO ⚠️'}`")
 
-        t_s, y_s = signal.step(tf_sys)
-        w_b, mag_b, phase_b = signal.bode(tf_sys)
+        if len(den_arr) == 3 and den_arr[0] > 0:
+            wn = math.sqrt(den_arr[2] / den_arr[0])
+            zeta = (den_arr[1] / den_arr[0]) / (2.0 * wn)
+            dc_gain = num_arr[-1] / den_arr[-1]
+            mp = 100.0 * math.exp(-zeta * math.pi / math.sqrt(1.0 - zeta ** 2)) if 0 < zeta < 1 else 0.0
+            ts = 4.0 / (zeta * wn) if zeta > 0 else 0.0
+            st.latex(f"\\omega_n = {wn:.3f}\\,\\text{{rad/s}}, \\quad \\zeta = {zeta:.3f}, \\quad M_p = {mp:.2f}\\%, \\quad T_s(2\\%) = {ts:.3f}\\,\\text{{s}}")
 
-        fc1, fc2 = st.columns(2)
-        with fc1:
-            fig_st, ax_st = plt.subplots(figsize=(6, 3.2))
-            ax_st.plot(t_s, y_s, color="#1D4ED8", linewidth=2)
-            ax_st.set_title("Unit Step Response y(t)")
-            ax_st.grid(True, linestyle=":")
-            st.pyplot(fig_st)
-        with fc2:
-            fig_bd, ax_bd = plt.subplots(figsize=(6, 3.2))
-            ax_bd.semilogx(w_b, mag_b, color="#DC2626", linewidth=2)
-            ax_bd.set_title("Bode Magnitude Plot (dB)")
-            ax_bd.grid(True, which="both", linestyle=":")
-            st.pyplot(fig_bd)
+            t_vec = np.linspace(0, max(5.0, ts * 1.5), 250)
+            if 0 < zeta < 1:
+                wd = wn * math.sqrt(1.0 - zeta ** 2)
+                phi = math.acos(zeta)
+                y_vec = dc_gain * (1.0 - (np.exp(-zeta * wn * t_vec) / math.sqrt(1.0 - zeta ** 2)) * np.sin(wd * t_vec + phi))
+            else:
+                y_vec = dc_gain * (1.0 - np.exp(-wn * t_vec))
+            st.markdown("#### 📈 Unit Step Response y(t):")
+            st.line_chart(pd.DataFrame({"t (s)": np.round(t_vec, 3), "y(t)": y_vec}).set_index("t (s)"))
+
+        w_freqs = np.logspace(-1, 2, 150)
+        s_jw = 1j * w_freqs
+        H_jw = np.polyval(num_arr, s_jw) / np.polyval(den_arr, s_jw)
+        mag_db = 20.0 * np.log10(np.maximum(1e-12, np.abs(H_jw)))
+        st.markdown("#### 📊 Bode Magnitude Plot (dB vs rad/s):")
+        st.line_chart(pd.DataFrame({"w (rad/s)": np.round(w_freqs, 2), "Magnitude (dB)": mag_db}).set_index("w (rad/s)"))
 
     render_camera_ai_section(
         "tab7_ctrl",
         "هندسة التحكم الآلي والـ PLC والميكاترونكس (Control Systems & Automation)",
-        "حل مسائل Block Diagram Reduction, Signal Flow Graph (Mason's Formula), Routh-Hurwitz Stability Criterion, Root Locus, Bode & Nyquist, PID Tuning, State-Space Controllability/Observability, و PLC Ladder Logic.",
+        "حل مسائل Block Diagram Reduction, Signal Flow Graph (Mason's Formula), Routh-Hurwitz Stability Criterion, Root Locus, Bode & Nyquist, PID Tuning, State-Space, و PLC Ladder Logic.",
         lambda: f"G(s) Num={num_g}, Den={den_g}",
     )
 
 
-# ==============================================================================
-# TAB 8: البرمجة الهندسية وسجل التقارير (Engineering Code Sandbox & Reports)
-# ==============================================================================
 with TABS[7]:
     st.markdown("""
     <div class='sec-header'>
@@ -1224,7 +1264,7 @@ with TABS[7]:
     """, unsafe_allow_html=True)
 
     py_code = st.text_area(
-        "✍️ Python / NumPy / SymPy Engineering Sandbox:",
+        "✍️ Python / NumPy Engineering Sandbox:",
         value="import numpy as np\nA = np.array([[4, 1], [2, 3]])\nprint('Eigenvalues:', np.linalg.eigvals(A))",
         height=110,
     )
@@ -1233,7 +1273,7 @@ with TABS[7]:
         old_out = sys.stdout
         sys.stdout = buf_out
         try:
-            exec(py_code, {"np": np, "sp": sp, "pd": pd, "math": math})
+            exec(py_code, {"np": np, "pd": pd, "math": math, "cmath": cmath})
             st.code(buf_out.getvalue() or "Executed successfully.", language="text")
         except Exception as e:
             st.error(f"Execution Error: {e}")
