@@ -278,7 +278,6 @@ with col_control:
             grid_data = [act_letters, pred_list, time_list]
         else:
             if num_acts == 6:
-                # مثال افتراضي متفرع جميل يظهر التوازي في الشبكة بدلاً من خط مستقيم
                 default_rels = ["-", "A", "A", "B", "B,C", "D,E"] if "Predecessors" in rel_mode else ["B,C", "D,E", "E", "F", "F", "-"]
                 default_times = ["4", "6", "3", "5", "8", "2"]
             else:
@@ -781,12 +780,10 @@ with col_display:
 
             # بناء عقد وأسهم AOA في حال اختيار AOA
             preds_map = {u: sorted([e["u"] for e in edges if e["v"] == u]) for u in nodes}
-            succs_map = {u: sorted([e["v"] for e in edges if e["u"] == u]) for u in nodes}
             aoa_act_edges = {}
             aoa_dummies = []
             aoa_events = {}
             
-            # خوارزمية بناء دوائر أحداث AOA (Event Nodes)
             event_counter = 1
             start_evt = 1
             aoa_events[start_evt] = {"E": 0.0, "L": 0.0}
@@ -845,7 +842,7 @@ with col_display:
             st.download_button("📥 تحميل جدول المسار الحرج كملف إكسيل (CSV)", data=csv_net, file_name='cpm_network_schedule.csv', mime='text/csv', use_container_width=True)
 
             # =====================================================================
-            # الرسم التفاعلي للشبكة (مستطيلات لـ AON/Lags ودوائر لـ AOA مع خط أسود واضح)
+            # الرسم الهندسي المطابق لصور المحاضرات بدون كلمات زائدة (أرقام صافية 100%)
             # =====================================================================
             st.markdown(f"### 🎨 المخطط الشبكي الهندسي ({net_type}):")
             
@@ -865,12 +862,11 @@ with col_display:
             fig_net = go.Figure()
 
             # -----------------------------------------------------------------
-            # الحالة الأولى: رسم دوائر وأسهم حقيقية عند اختيار AOA
+            # الحالة الأولى: رسم دوائر مقسمة (T-Split Circles) وأسهم عند اختيار AOA
             # -----------------------------------------------------------------
             if "AOA" in net_type:
-                st.caption("🔵 **تمثيل AOA:** الدوائر تمثل الأحداث (Events)، والأسهم يكتب عليها اسم النشاط وزمنه مثل `A (10)`، والأسهم المنقطة تمثل الأنشطة الوهمية (Dummy).")
+                st.caption("🔵 **مفتاح دوائر AOA (كما في المحاضرة):** النصف العلوي للدائرة = `رقم الحدث` | الربع السفلي الأيسر = `ES` | الربع السفلي الأيمن = `LF` | فوق السهم = `النشاط والزمن` | المربع الصغير تحت السهم = `Slack`.")
                 
-                # تحديد إحداثيات كل دائرة حدث (Event Circle)
                 evt_level = {1: 0}
                 for u in topo_order:
                     ev_i, ev_j = aoa_act_edges[u]
@@ -884,13 +880,15 @@ with col_display:
                     evt_groups.setdefault(lv, []).append(ev_id)
 
                 evt_pos = {}
-                dx_aoa, dy_aoa = 4.5, 3.2
+                dx_aoa, dy_aoa = 5.0, 3.6
+                r_c = 0.72 # نصف قطر دائرة الحدث
+                
                 for lv, ev_list in evt_groups.items():
                     k = len(ev_list)
                     for idx_e, ev_id in enumerate(ev_list):
                         evt_pos[ev_id] = (lv * dx_aoa, ((k - 1) / 2.0 - idx_e) * dy_aoa)
 
-                # 1. رسم أسهم الأنشطة الحقيقية بين الدوائر
+                # 1. رسم أسهم الأنشطة بين الدوائر + اسم النشاط والزمن + مربع الـ Slack الصغير
                 for u in nodes:
                     ev_i, ev_j = aoa_act_edges[u]
                     x0_p, y0_p = evt_pos[ev_i]
@@ -898,27 +896,44 @@ with col_display:
                     is_c = (u in crit_nodes)
                     col_arrow = '#d90429' if is_c else '#1d3557'
                     
-                    # سهم متجه من الدائرة i إلى الدائرة j
+                    dx_vec, dy_vec = x1_p - x0_p, y1_p - y0_p
+                    dist = np.hypot(dx_vec, dy_vec)
+                    if dist > 2 * r_c:
+                        sx = x0_p + (dx_vec / dist) * r_c
+                        sy = y0_p + (dy_vec / dist) * r_c
+                        ex = x1_p - (dx_vec / dist) * r_c
+                        ey = y1_p - (dy_vec / dist) * r_c
+                    else:
+                        sx, sy, ex, ey = x0_p, y0_p, x1_p, y1_p
+                    
                     fig_net.add_annotation(
-                        x=x1_p, y=y1_p, ax=x0_p, ay=y0_p,
+                        x=ex, y=ey, ax=sx, ay=sy,
                         xref='x', yref='y', axref='x', ayref='y',
                         text="", showarrow=True,
-                        arrowhead=3, arrowsize=1.4, arrowwidth=3.2 if is_c else 2.0,
-                        arrowcolor=col_arrow, standoff=24, startstandoff=24
+                        arrowhead=2, arrowsize=1.3, arrowwidth=3.0 if is_c else 2.0,
+                        arrowcolor=col_arrow
                     )
                     
-                    # صندوق صغير فوق السهم يوضح اسم النشاط والزمن بخط أسود واضح
-                    mx, my = (x0_p + x1_p) / 2.0, (y0_p + y1_p) / 2.0
+                    mx, my = (sx + ex) / 2.0, (sy + ey) / 2.0
+                    # اسم النشاط والزمن فوق السهم مباشرة (مثل A 10)
                     fig_net.add_annotation(
-                        x=mx, y=my + 0.32,
-                        text=f"<b>{u} ({duration[u]:g})</b><br><span style='font-size:10px'>[{ES[u]:g} ➔ {EF[u]:g}]</span>",
+                        x=mx, y=my + 0.30,
+                        text=f"<b>{u}  {duration[u]:g}</b>",
                         showarrow=False,
-                        font=dict(size=12, color='#000000', family='Arial'),
-                        bgcolor='#ffccd5' if is_c else '#e0fbfc',
-                        bordercolor=col_arrow, borderwidth=1.5, borderpad=3
+                        font=dict(size=13, color='#000000', family='Arial'),
+                        bgcolor='rgba(255,255,255,0.85)'
+                    )
+                    # مستطيل صغير تحت السهم بداخله رقم الـ Slack فقط كما في رسمة اليد بالمحاضرة
+                    fig_net.add_annotation(
+                        x=mx, y=my - 0.32,
+                        text=f"<b>{start_slack[u]:g}</b>",
+                        showarrow=False,
+                        font=dict(size=11, color='#000000', family='Arial'),
+                        bgcolor='#ffccd5' if is_c else '#ffffff',
+                        bordercolor=col_arrow, borderwidth=1.5, borderpad=2
                     )
 
-                # 2. رسم أسهم الأنشطة الوهمية (Dummy Activities) بخط متقطع
+                # 2. رسم أسهم الأنشطة الوهمية (Dummy Activities) بخط منقط
                 for d_i, d_j, p_act in aoa_dummies:
                     x0_p, y0_p = evt_pos[d_i]
                     x1_p, y1_p = evt_pos[d_j]
@@ -928,55 +943,68 @@ with col_display:
                         line=dict(color='#6c757d', width=1.8, dash='dot'),
                         hoverinfo='none', showlegend=False
                     ))
+
+                # 3. رسم دوائر الأحداث المقسمة من الداخل (T-Split Circles)
+                for e_id, (cx, cy) in evt_pos.items():
+                    fig_net.add_shape(
+                        type="circle",
+                        x0=cx - r_c, y0=cy - r_c,
+                        x1=cx + r_c, y1=cy + r_c,
+                        line=dict(color='#1d3557', width=2.5),
+                        fillcolor='#ffffff',
+                        layer="below"
+                    )
+                    # خط أفقي يقسم الدائرة لنصف علوي ونصف سفلي
+                    fig_net.add_shape(
+                        type="line",
+                        x0=cx - r_c, y0=cy,
+                        x1=cx + r_c, y1=cy,
+                        line=dict(color='#1d3557', width=1.8),
+                        layer="below"
+                    )
+                    # خط رأسي يقسم النصف السفلي إلى (E يسار | L يمين)
+                    fig_net.add_shape(
+                        type="line",
+                        x0=cx, y0=cy - r_c,
+                        x1=cx, y1=cy,
+                        line=dict(color='#1d3557', width=1.8),
+                        layer="below"
+                    )
+                    # رقم الحدث فوق، والزمن المبكر يسار، والمتأخر يمين بدون حروف
                     fig_net.add_annotation(
-                        x=(x0_p + x1_p)/2.0, y=(y0_p + y1_p)/2.0,
-                        text="<b>Dummy (0)</b>", showarrow=False,
-                        font=dict(size=10, color='#000000'),
-                        bgcolor='#f8f9fa', bordercolor='#adb5bd', borderwidth=1
+                        x=cx, y=cy + r_c * 0.45,
+                        text=f"<b>{e_id}</b>", showarrow=False,
+                        font=dict(size=13, color='#000000', family='Arial')
+                    )
+                    fig_net.add_annotation(
+                        x=cx - r_c * 0.42, y=cy - r_c * 0.42,
+                        text=f"<b>{aoa_events[e_id]['E']:g}</b>", showarrow=False,
+                        font=dict(size=11, color='#000000', family='Arial')
+                    )
+                    fig_net.add_annotation(
+                        x=cx + r_c * 0.42, y=cy - r_c * 0.42,
+                        text=f"<b>{aoa_events[e_id]['L']:g}</b>", showarrow=False,
+                        font=dict(size=11, color='#000000', family='Arial')
                     )
 
-                # 3. رسم دوائر الأحداث (Circles) بخط أسود واضح جداً
-                ev_ids = sorted(evt_pos.keys())
-                ev_x = [evt_pos[e_id][0] for e_id in ev_ids]
-                ev_y = [evt_pos[e_id][1] for e_id in ev_ids]
-                ev_texts = [
-                    f"<b>Event {e_id}</b><br>E:{aoa_events[e_id]['E']:g} | L:{aoa_events[e_id]['L']:g}"
-                    for e_id in ev_ids
-                ]
-                
-                fig_net.add_trace(go.Scatter(
-                    x=ev_x, y=ev_y,
-                    mode='markers+text',
-                    text=ev_texts,
-                    textposition="middle center",
-                    textfont=dict(size=11, color='#000000', family='Arial Black'),
-                    marker=dict(
-                        size=56,
-                        color='#fff3b0',
-                        symbol='circle',
-                        line=dict(color='#e09f3e', width=3.5)
-                    ),
-                    hoverinfo='text',
-                    showlegend=False
-                ))
-
+                max_aoa_lv = max(evt_groups.keys()) if evt_groups else 1
                 fig_net.update_layout(
-                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-2, (max(evt_groups.keys()) + 1) * dx_aoa]),
-                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-1.8, max_aoa_lv * dx_aoa + 1.8]),
+                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, scaleanchor="x", scaleratio=1),
                     plot_bgcolor='#ffffff',
                     paper_bgcolor='#ffffff',
-                    height=max(520, max_in_col * 140),
-                    margin=dict(l=20, r=20, t=20, b=20)
+                    height=max(540, max_in_col * 155),
+                    margin=dict(l=15, r=15, t=20, b=20)
                 )
 
             # -----------------------------------------------------------------
-            # الحالة الثانية: رسم مستطيلات هندسية حقيقية لـ AON و Network Lags
+            # الحالة الثانية: رسم شبكة 3×3 نظيفة تماماً لـ AON و Network Lags
             # -----------------------------------------------------------------
             else:
-                st.caption("🟥 **تمثيل AON & Lags:** كل نشاط يُرسم كمستطيل مقسم داخلياً (الأحمر = نشاط حرج على المسار الحرج، الأزرق = نشاط غير حرج به وقت سماح Slack).")
+                st.caption("🟥 **مفتاح مستطيل الـ 9 خانات (3×3 كما في المحاضرة):** الصف العلوي `(ES | النشاط | EF)` — الصف الأوسط `(SL | مربع وردي | SL)` — الصف السفلي `(LS | الزمن DUR | LF)`.")
                 
-                dx_aon, dy_aon = 4.6, 2.8
-                box_w, box_h = 1.45, 0.85 # نصف عرض ونصف ارتفاع المستطيل
+                dx_aon, dy_aon = 4.4, 2.7
+                box_w, box_h = 1.25, 0.85
                 
                 pos = {}
                 for lv, u_list in levels_map.items():
@@ -984,13 +1012,13 @@ with col_display:
                     for idx_u, u in enumerate(u_list):
                         pos[u] = (lv * dx_aon, ((k - 1) / 2.0 - idx_u) * dy_aon)
 
-                # 1. رسم الأسهم الخارجة من يمين المستطيل الأول إلى يسار المستطيل الثاني
+                # 1. رسم الأسهم بين المستطيلات
                 for e in edges:
                     u, v = e["u"], e["v"]
                     x0_p, y0_p = pos[u]
                     x1_p, y1_p = pos[v]
                     is_crit_edge = (u in crit_nodes and v in crit_nodes)
-                    line_col = '#d90429' if is_crit_edge else '#495057'
+                    line_col = '#d90429' if is_crit_edge else '#343a40'
                     
                     start_x = x0_p + box_w
                     end_x = x1_p - box_w
@@ -999,74 +1027,98 @@ with col_display:
                         x=end_x, y=y1_p, ax=start_x, ay=y0_p,
                         xref='x', yref='y', axref='x', ayref='y',
                         text="", showarrow=True,
-                        arrowhead=2, arrowsize=1.3, arrowwidth=3.0 if is_crit_edge else 1.8,
+                        arrowhead=2, arrowsize=1.25, arrowwidth=2.8 if is_crit_edge else 1.8,
                         arrowcolor=line_col
                     )
                     
-                    # إذا كان هناك Lag نكتبه في بطاقة واضحة على السهم
                     if e["type"] != "FS" or e["lag"] != 0:
                         mx, my = (start_x + end_x) / 2.0, (y0_p + y1_p) / 2.0
+                        lag_txt = f"LAG {e['lag']:g}" if e["type"] == "FS" else f"{e['type']} {e['lag']:g}"
                         fig_net.add_annotation(
-                            x=mx, y=my + 0.25,
-                            text=f"<b>{e['type']} = {e['lag']:g}</b>",
+                            x=mx, y=my + 0.22,
+                            text=f"<b>{lag_txt}</b>",
                             showarrow=False,
                             font=dict(size=11, color='#000000', family='Arial'),
-                            bgcolor='#ffc6ff', bordercolor='#9d4edd', borderwidth=1.5, borderpad=2
+                            bgcolor='#ffe5ec', bordercolor='#d90429', borderwidth=1.2, borderpad=2
                         )
 
-                # 2. رسم المستطيلات الحقيقية (Rectangles) والخطوط الداخلية والنص الأسود الواضح
+                # 2. رسم مستطيلات 3×3 مع الخلية الوسطى الوردية والأرقام الصافية بدون حروف
                 for u in nodes:
                     cx, cy = pos[u]
                     is_c = (u in crit_nodes)
-                    fill_col = '#ffccd5' if is_c else '#dbeafe'
-                    border_col = '#d90429' if is_c else '#1d4ed8'
+                    fill_col = '#fff0f3' if is_c else '#f8f9fa'
+                    border_col = '#d90429' if is_c else '#1d3557'
+                    center_cell_col = '#ff007f' if is_c else '#ff758f' # المربع الوردي في المنتصف كما في Example 6.20
                     
-                    # إطار المستطيل الخارجي للنشاط
+                    # الإطار الخارجي للمستطيل
                     fig_net.add_shape(
                         type="rect",
                         x0=cx - box_w, y0=cy - box_h,
                         x1=cx + box_w, y1=cy + box_h,
-                        line=dict(color=border_col, width=3 if is_c else 2),
+                        line=dict(color=border_col, width=2.8 if is_c else 2.0),
                         fillcolor=fill_col,
                         layer="below"
                     )
-                    # خطوط تقسيم داخلية أفقية داخل المستطيل (مثل جدول المحاضرة)
+                    # تلوين المربع الصغير في المنتصف باللون الوردي كما في السلايد
                     fig_net.add_shape(
-                        type="line",
-                        x0=cx - box_w, y0=cy + box_h*0.33,
-                        x1=cx + box_w, y1=cy + box_h*0.33,
-                        line=dict(color=border_col, width=1),
+                        type="rect",
+                        x0=cx - box_w/3.0, y0=cy - box_h/3.0,
+                        x1=cx + box_w/3.0, y1=cy + box_h/3.0,
+                        line=dict(color=border_col, width=1.0),
+                        fillcolor=center_cell_col,
                         layer="below"
                     )
-                    fig_net.add_shape(
-                        type="line",
-                        x0=cx - box_w, y0=cy - box_h*0.33,
-                        x1=cx + box_w, y1=cy - box_h*0.33,
-                        line=dict(color=border_col, width=1),
-                        layer="below"
-                    )
-                    
-                    # النص داخل المستطيل بلون أسود صريح (#000000) لا يتأثر بالـ Dark Mode
-                    box_label = (
-                        f"<b>ES:{ES[u]:g} | [{u}] | EF:{EF[u]:g}</b><br>"
-                        f"SL:{start_slack[u]:g} | <b>Dur:{duration[u]:g}</b> | SL:{finish_slack[u]:g}<br>"
-                        f"LS:{LS[u]:g} | Free:{free_slack[u]:g} | LF:{LF[u]:g}"
-                    )
-                    fig_net.add_annotation(
-                        x=cx, y=cy,
-                        text=box_label,
-                        showarrow=False,
-                        font=dict(size=11, color='#000000', family='Consolas, monospace'),
-                        align="center"
-                    )
+                    # خطان أفقيان لتقسيم المستطيل لـ 3 صفوف
+                    for r_frac in [-1.0/3.0, 1.0/3.0]:
+                        fig_net.add_shape(
+                            type="line",
+                            x0=cx - box_w, y0=cy + box_h * r_frac,
+                            x1=cx + box_w, y1=cy + box_h * r_frac,
+                            line=dict(color=border_col, width=1.2),
+                            layer="below"
+                        )
+                    # خطان رأسيان لتقسيم المستطيل لـ 3 أعمدة (3x3 Grid)
+                    for c_frac in [-1.0/3.0, 1.0/3.0]:
+                        fig_net.add_shape(
+                            type="line",
+                            x0=cx + box_w * c_frac, y0=cy - box_h,
+                            x1=cx + box_w * c_frac, y1=cy + box_h,
+                            line=dict(color=border_col, width=1.2),
+                            layer="below"
+                        )
 
-                # إضافة أثر شفاف لتفعيل خاصية الـ Hover والـ Zoom بسلاسة
+                    # وضع الأرقام فقط داخل الخانات الـ 8 المحيطة بالمربع الوردي الأوسط
+                    cells_coords = [
+                        # الصف العلوي: ES | ID | EF
+                        (cx - box_w*0.67, cy + box_h*0.67, f"{ES[u]:g}"),
+                        (cx,              cy + box_h*0.67, f"{u}"),
+                        (cx + box_w*0.67, cy + box_h*0.67, f"{EF[u]:g}"),
+                        # الصف الأوسط: Start SL | [مربع وردي] | Finish SL
+                        (cx - box_w*0.67, cy,              f"{start_slack[u]:g}"),
+                        (cx + box_w*0.67, cy,              f"{finish_slack[u]:g}"),
+                        # الصف السفلي: LS | DUR | LF
+                        (cx - box_w*0.67, cy - box_h*0.67, f"{LS[u]:g}"),
+                        (cx,              cy - box_h*0.67, f"{duration[u]:g}"),
+                        (cx + box_w*0.67, cy - box_h*0.67, f"{LF[u]:g}"),
+                    ]
+                    for tx_c, ty_c, val_str in cells_coords:
+                        fig_net.add_annotation(
+                            x=tx_c, y=ty_c,
+                            text=f"<b>{val_str}</b>",
+                            showarrow=False,
+                            font=dict(size=12, color='#000000', family='Arial'),
+                            align="center"
+                        )
+
                 fig_net.add_trace(go.Scatter(
                     x=[pos[u][0] for u in nodes],
                     y=[pos[u][1] for u in nodes],
                     mode='markers',
                     marker=dict(size=10, opacity=0),
-                    text=[f"النشاط {u}: الزمن={duration[u]:g}, المسار={'حرج' if u in crit_nodes else 'عادي'}" for u in nodes],
+                    text=[
+                        f"Activity {u} | Dur={duration[u]:g} | ES={ES[u]:g}, EF={EF[u]:g} | LS={LS[u]:g}, LF={LF[u]:g} | SL={start_slack[u]:g}"
+                        for u in nodes
+                    ],
                     hoverinfo='text',
                     showlegend=False
                 ))
@@ -1074,7 +1126,7 @@ with col_display:
                 fig_net.update_layout(
                     xaxis=dict(
                         showgrid=False, zeroline=False, showticklabels=False,
-                        range=[-box_w - 0.8, max_lv * dx_aon + box_w + 0.8]
+                        range=[-box_w - 0.7, max_lv * dx_aon + box_w + 0.7]
                     ),
                     yaxis=dict(
                         showgrid=False, zeroline=False, showticklabels=False,
