@@ -15,7 +15,7 @@ import pandas as pd
 from PIL import Image, ImageEnhance, ImageOps, ImageFilter
 
 st.set_page_config(
-    page_title="Engineering Solver Hub | المنصة الهندسية المتقدمة",
+    page_title="Universal Engineering Solver | المنصة الهندسية العامة",
     page_icon="⚙️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -23,7 +23,7 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .main .block-container { padding-top: 1.1rem; padding-bottom: 2rem; max-width: 97%; }
+    .main .block-container { padding-top: 1rem; padding-bottom: 2rem; max-width: 97%; }
     .eng-banner {
         background: linear-gradient(135deg, rgb(15, 23, 42) 0%, rgb(30, 58, 138) 55%, rgb(15, 118, 110) 100%);
         color: white; padding: 18px 24px; border-radius: 12px; margin-bottom: 14px;
@@ -103,17 +103,14 @@ def norm_cdf(z_val):
 
 with st.sidebar:
     st.markdown("<h4>⚙️ الإعدادات الهندسية | System Config</h4>", unsafe_allow_html=True)
-    key_in = st.text_input(
+    key_side = st.text_input(
         "🔑 Gemini API Key:",
         value=st.session_state.api_key,
         type="password",
-        help="أدخل مفتاح Google Gemini API أو احفظه في Streamlit Secrets باسم GEMINI_API_KEY.",
+        key="sidebar_api_key_in",
     )
-    st.session_state.api_key = key_in.strip()
-    if st.session_state.api_key:
-        st.success("✅ AI & Auto-Table Active | الذكاء الاصطناعي مفعل")
-    else:
-        st.warning("⚠️ Enter API Key for AI | الجداول والحل البرمجي يعملان فوراً")
+    if key_side.strip() != st.session_state.api_key:
+        st.session_state.api_key = key_side.strip()
 
     ai_model_name = st.selectbox(
         "🤖 AI Model | النموذج:",
@@ -132,9 +129,38 @@ with st.sidebar:
     st.metric("📊 Solved Problems | المسائل المحلولة", len(st.session_state.history))
 
 
+st.markdown("""
+<div class='eng-banner'>
+    <h1>⚙️ المنصة الهندسية العامة لحل جميع المسائل | Universal Engineering Solver</h1>
+    <p>حل أي مسألة هندسية جديدة بالجداول الحرة أو بالكاميرا والذكاء الاصطناعي • AON / AOA / Lags / Crashing • Economy & Multi-Project NPV • Numerical Methods • ODEs & Laplace • Mechanics & Beams • Circuits & Control</p>
+</div>
+""", unsafe_allow_html=True)
+
+if not st.session_state.api_key:
+    with st.expander("🔑 تفعيل الكاميرا والذكاء الاصطناعي على الموبايل (أدخل مفتاح Gemini API Key هنا مباشرة)", expanded=True):
+        col_k1, col_k2 = st.columns([3, 1.2])
+        with col_k1:
+            main_key_in = st.text_input(
+                "الصق مفتاح Gemini API Key هنا لتفعيل حل الصور والمسائل بالذكاء الاصطناعي:",
+                type="password",
+                placeholder="AIzaSy...",
+                key="main_top_api_input",
+            )
+        with col_k2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("✅ تفعيل المفتاح الآن", use_container_width=True):
+                st.session_state.api_key = main_key_in.strip()
+                st.rerun()
+        st.caption("💡 ملاحظة: جميع الجداول والحسابات البرمجية والرسومات الهندسية في الأسفل تعمل فوراً لأي مسألة جديدة حتى بدون مفتاح API.")
+
+
 def apply_vision_filter(pil_img, mode_str, rot_angle=0):
     if pil_img is None:
         return None
+    try:
+        pil_img = ImageOps.exif_transpose(pil_img)
+    except Exception:
+        pass
     img = pil_img.convert("RGB")
     if rot_angle != 0:
         img = img.rotate(-rot_angle, expand=True)
@@ -178,14 +204,14 @@ def apply_vision_filter(pil_img, mode_str, rot_angle=0):
 
 def call_gemini_rest_api(domain_title, domain_guide, text_data, pil_img=None, mode="solve", target_columns=None):
     if not st.session_state.api_key:
-        return "❌ **Error:** يرجى إدخال مفتاح `Gemini API Key` في القائمة الجانبية أولاً."
+        return "❌ **تنبيه:** يرجى وضع مفتاح `Gemini API Key` في الشريط العلوي لتفعيل الذكاء الاصطناعي، أو استخدم زر **(⚙️ الحل البرمجي للجدول)** أعلى الكاميرا لحل المسألة فوراً بدون مفتاح."
     try:
         if mode == "json_table" and target_columns:
             cols_str = json.dumps(target_columns, ensure_ascii=False)
             prompt_text = (
                 f"You are a precise Engineering Table Extractor for ({domain_title}). "
                 f"Read the image or text and return ONLY a valid JSON array of objects where each object has exact keys: {cols_str}. "
-                "Do not include markdown fences or explanations, output pure JSON array only."
+                "If a predecessor or successor is empty or none, use '-'. Output pure JSON array only."
             )
         elif mode == "ocr":
             prompt_text = (
@@ -197,12 +223,12 @@ def call_gemini_rest_api(domain_title, domain_guide, text_data, pil_img=None, mo
                 f"أنت بروفيسور في كلية الهندسة متخصص في ({domain_title}).\n"
                 f"أسلوب الإجابة المطلوب: {ai_detail_mode}.\n"
                 f"توجيهات التخصص: {domain_guide}\n"
-                "قم بحل المسألة الهندسية باللغتين العربية والإنجليزية للمصطلحات، متضمناً:\n"
+                "قم بحل المسألة الهندسية المرفقة (سواء من الصورة أو من الجدول) باللغتين العربية والإنجليزية للمصطلحات، متضمناً:\n"
                 "1. **جدول المعطيات والمطلوب (Given Table & Required)**.\n"
                 "2. **القوانين الهندسية (Governing Equations)** بصيغة LaTeX واضحة.\n"
-                "3. **خطوات الحل والجداول التفصيلية (Step-by-Step Calculation & Tables)**.\n"
-                "4. **الناتج النهائي والترتيب الهندسي (Final Answer & Priority/Critical Path)**.\n"
-                f"\nبيانات الجدول المدخلة:\n{text_data}"
+                "3. **خطوات الحل والجداول التفصيلية الكاملة لكل عنصر/نشاط (Step-by-Step Calculation & Tables)**.\n"
+                "4. **الناتج النهائي والترتيب الهندسي (Final Answer & Critical Path / Priority)**.\n"
+                f"\nبيانات المسألة النصية:\n{text_data}"
             )
 
         parts_list = [{"text": prompt_text}]
@@ -262,7 +288,7 @@ def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn,
             key=f"{key_id}_flt",
         )
     with c3:
-        rot = st.selectbox("🔄 Rotate | تدوير:", [0, 90, 180, 270], key=f"{key_id}_rot")
+        rot = st.selectbox("🔄 Rotate | تدوير يدوي إضافي:", [0, 90, 180, 270], key=f"{key_id}_rot")
 
     raw_img, proc_img = None, None
     if "Camera" in src:
@@ -282,20 +308,20 @@ def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn,
         proc_img = apply_vision_filter(raw_img, flt, rot)
         ic1, ic2 = st.columns(2)
         with ic1:
-            st.image(raw_img, caption="Original Image | الصورة الأصلية", use_container_width=True)
+            st.image(ImageOps.exif_transpose(raw_img), caption="Original Image (Auto-Oriented) | الصورة الأصلية", use_container_width=True)
         with ic2:
             st.image(proc_img, caption=f"Processed Image ({flt})", use_container_width=True)
 
     extra_q = st.text_input(
         "💡 Specific AI Instruction | توجيه خاص للذكاء الاصطناعي (اختياري):",
-        placeholder="مثال: اشرح خطوات المسار الأمامي والخلفي، أو رتب المشروعات حسب الـ NPV...",
+        placeholder="مثال: حل المسألة الموجودة في الصورة بالتفصيل وارسم الجدول...",
         key=f"{key_id}_note",
     )
 
     b1, b2, b3 = st.columns(3)
     with b1:
         solve_ai_clicked = st.button(
-            f"🤖 Solve with AI | حل شامل بالـ AI",
+            "🤖 Solve with AI | حل شامل بالـ AI",
             type="primary",
             use_container_width=True,
             key=f"{key_id}_btn_solve",
@@ -317,9 +343,9 @@ def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn,
         if proc_img is None:
             st.warning("⚠️ يرجى تصوير جدول المسألة بالكاميرا أو رفع صورته أولاً ليتم ملء الجدول تلقائياً.")
         elif not table_state_key or not table_cols:
-            st.info("ℹ️ استخدم زر استخراج النص (OCR) لهذا القسم.")
+            st.info("ℹ️ استخدم زر استخراج النص (OCR) أو الحل الشامل لهذا القسم.")
         else:
-            with st.spinner("📊 جاري قراءة الجدول من الصورة وملء الخلايا تلقائياً عبر Gemini Vision..."):
+            with st.spinner("📊 جاري قراءة الجدول من الصورة وملء الخلايا تلقائياً ليتم حلها ورسمها برمجياً..."):
                 raw_json = call_gemini_rest_api(
                     domain_title, domain_guide, extra_q, proc_img, mode="json_table", target_columns=table_cols
                 )
@@ -329,12 +355,12 @@ def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn,
                         parsed_list = json.loads(match.group(0))
                         new_df = pd.DataFrame(parsed_list)
                         st.session_state.custom_tables[table_state_key] = new_df
-                        st.success("✅ تم ملء الجدول التفاعلي من الصورة بنجاح! يتم الآن تحديث الجدول...")
+                        st.success("✅ تم نقل المسألة من الصورة إلى الجدول التفاعلي بنجاح! اضغط الآن على زر الحل البرمجي أعلى الكاميرا.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"⚠️ تعذر تحويل البيانات إلى جدول: {e}\n{raw_json}")
                 else:
-                    st.error(f"⚠️ لم يتم العثور على جدول واضح في الصورة:\n{raw_json}")
+                    st.error(f"⚠️ تعذر قراءة الجدول تلقائياً:\n{raw_json}")
 
     if ocr_ai_clicked:
         if proc_img is None:
@@ -358,6 +384,20 @@ def render_camera_ai_section(key_id, domain_title, domain_guide, get_context_fn,
                 st.markdown(f"<h4>🤖 الحل الهندسي التفصيلي | AI Engineering Solution ({domain_title}):</h4>", unsafe_allow_html=True)
                 st.markdown(res_solve)
                 add_log(domain_title, "Gemini AI Solver", ctx_str, res_solve)
+
+
+def parse_inline_dep_token(token_str):
+    tok = token_str.strip()
+    if not tok or tok in ["-", "None", "nan"]:
+        return None
+    m_colon = re.match(r"^([A-Za-z0-9_]+)\s*[:\(\s]\s*(FS|SS|FF|SF)\s*([+\-]?\d*\.?\d*)\)?$", tok, re.IGNORECASE)
+    if m_colon:
+        act_n = m_colon.group(1).strip()
+        rel_t = m_colon.group(2).upper()
+        lag_s = m_colon.group(3).strip()
+        lag_v = float(lag_s) if lag_s and lag_s not in ["+", "-"] else 0.0
+        return (act_n, rel_t, lag_v)
+    return (tok, "FS", 0.0)
 
 
 def detect_network_cycles_and_dangling(tasks, order_keys):
@@ -386,12 +426,7 @@ def detect_network_cycles_and_dangling(tasks, order_keys):
                 break
 
     start_nodes = [k for k in order_keys if not tasks[k]["preds"]]
-    end_nodes = []
-    for k in order_keys:
-        has_succ = any(any(p == k for p, _, _ in tasks[s]["preds"]) for s in order_keys)
-        if not has_succ:
-            end_nodes.append(k)
-
+    end_nodes = [k for k in order_keys if not any(any(p == k for p, _, _ in tasks[s]["preds"]) for s in order_keys)]
     return has_cycle, cycle_path, start_nodes, end_nodes
 
 
@@ -430,15 +465,8 @@ def build_aon_9cell_svg(tasks, order_keys):
         for p_id, r_type, lag in tasks[k]["preds"]:
             if p_id in coords:
                 x1, y1 = coords[p_id]
-                if r_type in ["SS", "SF"]:
-                    sx, sy = x1, y1 + 70
-                else:
-                    sx, sy = x1 + 150, y1 + 45
-                if r_type in ["FF", "SF"]:
-                    ex, ey = x2 + 150, y2 + 75
-                else:
-                    ex, ey = x2, y2 + 45
-
+                sx, sy = (x1, y1 + 70) if r_type in ["SS", "SF"] else (x1 + 150, y1 + 45)
+                ex, ey = (x2 + 150, y2 + 75) if r_type in ["FF", "SF"] else (x2, y2 + 45)
                 is_crit_edge = tasks[p_id]["crit_any"] and tasks[k]["crit_any"]
                 col = "rgb(219,39,119)" if is_crit_edge else "rgb(71,85,105)"
                 dash = "stroke-dasharray='5,3'" if lag != 0 or r_type != "FS" else ""
@@ -583,21 +611,14 @@ def build_aoa_slide_svg(tasks, order_keys, proj_dur):
     return "\n".join(svg)
 
 
-st.markdown("""
-<div class='eng-banner'>
-    <h1>⚙️ المنصة الهندسية الجامعية المتقدمة | Advanced Engineering Solver Platform</h1>
-    <p>Smart Image-to-Table AI Auto-Fill • AON (Split-Critical 9-Cell Box), AOA, Lags & Project Crashing • Multi-Project NPV, Payback & Sensitivity Profile • Numerical Methods with Error % • Routh-Hurwitz Array Generator • Mohr's Circle & SVG Export</p>
-</div>
-""", unsafe_allow_html=True)
-
 TABS = st.tabs([
-    "1️⃣ شبكات الأعمال والضغط (AON / AOA / Lags / Crashing)",
-    "2️⃣ الفوائد وحساسية المشروعات (NPV / Payback / Economy)",
-    "3️⃣ الطرق العددية ونسب الخطأ (Numerical Tables & Error %)",
-    "4️⃣ التفاضل ولابلاس (ODEs & Laplace)",
-    "5️⃣ الميكانيكا والكمرات (Mohr & Beams)",
-    "6️⃣ الدوائر والمحولات (Circuits & Power)",
-    "7️⃣ التحكم وجدول راوث (Control & Routh-Hurwitz)",
+    "1️⃣ شبكات الأعمال العامة (AON / AOA / Lags / Crashing)",
+    "2️⃣ الفوائد وتقييم المشروعات العام (Economy & NPV)",
+    "3️⃣ الطرق العددية العامة (Numerical Methods)",
+    "4️⃣ التفاضل ولابلاس العام (ODEs & Laplace)",
+    "5️⃣ الميكانيكا والكمرات العامة (Mohr & Beams)",
+    "6️⃣ الدوائر والمحولات العامة (Circuits & Power)",
+    "7️⃣ التحكم وجدول راوث العام (Control & Routh)",
     "8️⃣ البرمجة والتقارير (Code & History)",
 ])
 
@@ -605,40 +626,53 @@ TABS = st.tabs([
 with TABS[0]:
     st.markdown("""
     <div class='sec-header'>
-        <h3>📊 1. شبكات الأعمال، الـ Lags، وضغط المشروعات | Project Management (AON, AOA, Lags, Crashing & PERT)</h3>
-        <p>يدعم الجداول الرأسية والأفقية، تلوين البداية/النهاية الحرجة منفردة في صندوق الـ 9 خانات، كاشف الأخطاء والمسارات المغلقة (Cycle Detector)، جدول ضغط المشروعات بأقل تكلفة (Project Crashing)، وتحميل رسومات الشبكة بصيغة SVG.</p>
+        <h3>📊 1. الحل العام لجميع مسائل شبكات الأعمال | Universal Project Management Solver (AON, AOA, Lags, Crashing & PERT)</h3>
+        <p>أدخل <b>أي مسألة جديدة</b> مهما كان عدد أنشطتها أو نوع علاقاتها (<b>Predecessors</b> أو <b>Successors</b> أو <b>Lags: FS, SS, FF, SF</b>)، أو اختر من القوالب الجاهزة.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    c_pm1, c_pm2, c_pm3 = st.columns([1.7, 1.15, 1.15])
+    c_pm1, c_pm2, c_pm3, c_pm4 = st.columns([1.6, 0.8, 1.0, 1.0])
     with c_pm1:
         pm_preset = st.selectbox(
-            "📚 Select Lecture Example or Mode | اختر مثال المحاضرة أو وضع الحل:",
+            "🛠️ وضع الإدخال أو القالب | Problem Mode:",
             [
-                "1. Example 4 (Slide 21 - KOLL Business Center AOA Network)",
-                "2. Figure 6.21 (Slide 47 - Network Using Lags A-to-F)",
-                "3. Example 6.20 (Slide 48 - Lag Exercises A-to-K Split-Critical)",
-                "4. Example 3 (Slide 31 - Steel Cylinder AON with Successors A-to-T)",
-                "5. Example 6 (Slide 35 - AOA Network A-to-R)",
-                "6. Project Crashing & Time-Cost Trade-off Table (ضغط المشروعات بأقل تكلفة)",
-                "7. PERT Probabilistic Table (to, tm, tp & Z-Probability)",
+                "🆕 1. Custom New Network | إدخال مسألة شبكات جديدة (جدول حر لأي مسألة)",
+                "📉 2. Custom Project Crashing | مسألة ضغط مشروعات بأقل تكلفة (Time-Cost)",
+                "🎲 3. Custom PERT Network | مسألة احتمالات بيرت (to, tm, tp)",
+                "📚 4. Lecture Example 4 (KOLL Business Center AOA)",
+                "📚 5. Lecture Figure 6.21 (Network Using Lags A-to-F)",
+                "📚 6. Lecture Example 6.20 (Lag Exercises A-to-K)",
+                "📚 7. Lecture Example 3 (Steel Cylinder Successors A-to-T)",
+                "📚 8. Lecture Example 6 (AOA Network A-to-R)",
             ],
         )
     with c_pm2:
-        table_orient = st.radio(
-            "📐 شكل الجدول | Table Layout:",
-            ["Vertical Table | جدول رأسي", "Horizontal Table | جدول أفقي"],
-            horizontal=True,
-        )
+        custom_n_acts = st.number_input("🔢 عدد الأنشطة:", min_value=2, max_value=40, value=6, step=1)
     with c_pm3:
+        table_orient = st.radio("📐 اتجاه الجدول:", ["رأسي (Vertical)", "أفقي (Horizontal)"], horizontal=True)
+    with c_pm4:
         dep_mode = st.radio(
-            "🔗 نوع الرابط | Dependency Column:",
-            ["Predecessors (السابق)", "Successors (اللاحق)"],
+            "🔗 قراءة العلاقات:",
+            ["تلقائي (Auto-Detect)", "Predecessors", "Successors"],
             horizontal=True,
-            index=1 if "Example 3" in pm_preset else 0,
         )
 
-    if "Example 4" in pm_preset:
+    if pm_preset.startswith("🆕 1."):
+        letters = [chr(65 + i) if i < 26 else f"A{i-25}" for i in range(int(custom_n_acts))]
+        init_pm_df = pd.DataFrame([
+            {
+                "Activity": letters[i],
+                "Description": f"Activity {letters[i]}",
+                "Predecessors": "-" if i == 0 else letters[i - 1],
+                "Successors": "-",
+                "Activity Time": float(4 + (i % 5)),
+            }
+            for i in range(int(custom_n_acts))
+        ])
+        init_lags_df = pd.DataFrame([
+            {"From Activity": "", "To Activity": "", "Relation (FS/SS/FF/SF)": "FS", "Lag Time": 0.0}
+        ])
+    elif "Example 4" in pm_preset:
         init_pm_df = pd.DataFrame([
             {"Activity": "A", "Description": "Application approval", "Predecessors": "-", "Successors": "B, C, D", "Activity Time": 5.0},
             {"Activity": "B", "Description": "Construction plans", "Predecessors": "A", "Successors": "E, F", "Activity Time": 15.0},
@@ -650,15 +684,14 @@ with TABS[0]:
             {"Activity": "H", "Description": "Occupancy", "Predecessors": "E, G", "Successors": "-", "Activity Time": 35.0},
         ])
         init_lags_df = pd.DataFrame(columns=["From Activity", "To Activity", "Relation (FS/SS/FF/SF)", "Lag Time"])
-
     elif "Figure 6.21" in pm_preset:
         init_pm_df = pd.DataFrame([
-            {"Activity": "A", "Description": "Design system", "Predecessors": "-", "Successors": "B, D, E, F", "Activity Time": 5.0},
-            {"Activity": "B", "Description": "Order hardware", "Predecessors": "A", "Successors": "C", "Activity Time": 1.0},
-            {"Activity": "C", "Description": "Install hardware", "Predecessors": "B", "Successors": "D", "Activity Time": 2.0},
-            {"Activity": "D", "Description": "Install software", "Predecessors": "A, C", "Successors": "E, F", "Activity Time": 6.0},
-            {"Activity": "E", "Description": "Test system", "Predecessors": "A, D", "Successors": "F", "Activity Time": 2.0},
-            {"Activity": "F", "Description": "System documentation", "Predecessors": "A, D, E", "Successors": "-", "Activity Time": 3.0},
+            {"Activity": "A", "Description": "Design system", "Predecessors": "-", "Successors": "-", "Activity Time": 5.0},
+            {"Activity": "B", "Description": "Order hardware", "Predecessors": "A:SS+3", "Successors": "-", "Activity Time": 1.0},
+            {"Activity": "C", "Description": "Install hardware", "Predecessors": "B:FS+4", "Successors": "-", "Activity Time": 2.0},
+            {"Activity": "D", "Description": "Install software", "Predecessors": "A, C", "Successors": "-", "Activity Time": 6.0},
+            {"Activity": "E", "Description": "Test system", "Predecessors": "A, D:SS+2", "Successors": "-", "Activity Time": 2.0},
+            {"Activity": "F", "Description": "System documentation", "Predecessors": "A, D:FF+2, E:FF+2", "Successors": "-", "Activity Time": 3.0},
         ])
         init_lags_df = pd.DataFrame([
             {"From Activity": "A", "To Activity": "B", "Relation (FS/SS/FF/SF)": "SS", "Lag Time": 3.0},
@@ -667,20 +700,19 @@ with TABS[0]:
             {"From Activity": "D", "To Activity": "F", "Relation (FS/SS/FF/SF)": "FF", "Lag Time": 2.0},
             {"From Activity": "E", "To Activity": "F", "Relation (FS/SS/FF/SF)": "FF", "Lag Time": 2.0},
         ])
-
     elif "Example 6.20" in pm_preset:
         init_pm_df = pd.DataFrame([
-            {"Activity": "A", "Description": "Task A", "Predecessors": "-", "Successors": "B, C, D", "Activity Time": 2.0},
-            {"Activity": "B", "Description": "Task B", "Predecessors": "A", "Successors": "E", "Activity Time": 4.0},
-            {"Activity": "C", "Description": "Task C", "Predecessors": "A", "Successors": "E, F", "Activity Time": 8.0},
-            {"Activity": "D", "Description": "Task D", "Predecessors": "A", "Successors": "F, G", "Activity Time": 9.0},
-            {"Activity": "E", "Description": "Task E", "Predecessors": "B, C", "Successors": "H", "Activity Time": 2.0},
-            {"Activity": "F", "Description": "Task F", "Predecessors": "C, D", "Successors": "H, I", "Activity Time": 7.0},
-            {"Activity": "G", "Description": "Task G", "Predecessors": "D", "Successors": "J", "Activity Time": 4.0},
-            {"Activity": "H", "Description": "Task H", "Predecessors": "E, F", "Successors": "K", "Activity Time": 5.0},
-            {"Activity": "I", "Description": "Task I", "Predecessors": "F", "Successors": "K", "Activity Time": 4.0},
-            {"Activity": "J", "Description": "Task J", "Predecessors": "G", "Successors": "K", "Activity Time": 7.0},
-            {"Activity": "K", "Description": "Task K", "Predecessors": "H, I, J", "Successors": "-", "Activity Time": 3.0},
+            {"Activity": "A", "Description": "Task A", "Predecessors": "-", "Successors": "-", "Activity Time": 2.0},
+            {"Activity": "B", "Description": "Task B", "Predecessors": "A:SS+5", "Successors": "-", "Activity Time": 4.0},
+            {"Activity": "C", "Description": "Task C", "Predecessors": "A", "Successors": "-", "Activity Time": 8.0},
+            {"Activity": "D", "Description": "Task D", "Predecessors": "A", "Successors": "-", "Activity Time": 9.0},
+            {"Activity": "E", "Description": "Task E", "Predecessors": "B, C:FF+7", "Successors": "-", "Activity Time": 2.0},
+            {"Activity": "F", "Description": "Task F", "Predecessors": "C, D:SS+4", "Successors": "-", "Activity Time": 7.0},
+            {"Activity": "G", "Description": "Task G", "Predecessors": "D", "Successors": "-", "Activity Time": 4.0},
+            {"Activity": "H", "Description": "Task H", "Predecessors": "E:FS+10, F:SS+5", "Successors": "-", "Activity Time": 5.0},
+            {"Activity": "I", "Description": "Task I", "Predecessors": "F", "Successors": "-", "Activity Time": 4.0},
+            {"Activity": "J", "Description": "Task J", "Predecessors": "G:FS+10", "Successors": "-", "Activity Time": 7.0},
+            {"Activity": "K", "Description": "Task K", "Predecessors": "H:FF+8, I, J:FF+8", "Successors": "-", "Activity Time": 3.0},
         ])
         init_lags_df = pd.DataFrame([
             {"From Activity": "A", "To Activity": "B", "Relation (FS/SS/FF/SF)": "SS", "Lag Time": 5.0},
@@ -692,7 +724,6 @@ with TABS[0]:
             {"From Activity": "H", "To Activity": "K", "Relation (FS/SS/FF/SF)": "FF", "Lag Time": 8.0},
             {"From Activity": "J", "To Activity": "K", "Relation (FS/SS/FF/SF)": "FF", "Lag Time": 8.0},
         ])
-
     elif "Example 3" in pm_preset:
         acts_3 = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T"]
         succ_3 = ["D","E, F","G","I, J","L","K","H, M","N","P","Q","R","Q","N","O, S","R","R","R","-","T","-"]
@@ -702,7 +733,6 @@ with TABS[0]:
             for a, s, t in zip(acts_3, succ_3, time_3)
         ])
         init_lags_df = pd.DataFrame(columns=["From Activity", "To Activity", "Relation (FS/SS/FF/SF)", "Lag Time"])
-
     else:
         acts_6 = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R"]
         pred_6 = ["-","-","-","A","B","B","C","D","E, F","F","G","G","K, L","H","I","J","M","Q"]
@@ -716,8 +746,8 @@ with TABS[0]:
     if "tab1_pm_df" in st.session_state.custom_tables:
         init_pm_df = st.session_state.custom_tables["tab1_pm_df"]
 
-    if "6. Project Crashing" in pm_preset:
-        st.markdown("<h4>📉 جدول ضغط المشروعات بأقل تكلفة | Project Crashing & Time-Cost Trade-off Table:</h4>", unsafe_allow_html=True)
+    if "2. Custom Project Crashing" in pm_preset:
+        st.markdown("<h4>📉 جدول ضغط المشروعات العام (أدخل أي أنشطة وتكاليف) | Universal Project Crashing Table:</h4>", unsafe_allow_html=True)
         crash_init = pd.DataFrame([
             {"Activity": "A", "Predecessors": "-", "Normal Time": 6.0, "Crash Time": 4.0, "Normal Cost": 1000.0, "Crash Cost": 1600.0},
             {"Activity": "B", "Predecessors": "A", "Normal Time": 8.0, "Crash Time": 5.0, "Normal Cost": 1500.0, "Crash Cost": 2100.0},
@@ -729,17 +759,19 @@ with TABS[0]:
         ed_crash = st.data_editor(crash_init, num_rows="dynamic", use_container_width=True, key="crash_editor")
         c_cr1, c_cr2 = st.columns(2)
         with c_cr1:
-            target_crash_dur = st.number_input("🎯 Target Crashed Project Duration | المدة المستهدفة بعد الضغط:", value=19.0, step=1.0)
+            target_crash_dur = st.number_input("🎯 Target Crashed Project Duration | المدة المستهدفة بعد الضغط:", value=16.0, step=1.0)
         with c_cr2:
             indirect_cost_day = st.number_input("💰 Indirect Cost per Day | التكلفة غير المباشرة لليوم الواحد:", value=250.0, step=50.0)
 
-        if st.button("⚙️ Compute Crash Slopes & Step-by-Step Optimal Crashing Schedule", type="primary"):
+        if st.button("⚙️ Solve Crashing Table Step-by-Step", type="primary"):
             c_tasks = {}
             c_keys = []
             base_direct_cost = 0.0
             slope_rows = []
             for _, r in ed_crash.iterrows():
                 a_id = str(r["Activity"]).strip()
+                if not a_id or a_id == "nan":
+                    continue
                 nt, ct = float(r["Normal Time"]), float(r["Crash Time"])
                 nc, cc = float(r["Normal Cost"]), float(r["Crash Cost"])
                 max_c = max(0.0, nt - ct)
@@ -750,7 +782,6 @@ with TABS[0]:
                 base_direct_cost += nc
                 slope_rows.append({"Activity": a_id, "Normal Time": nt, "Crash Time": ct, "Max Crash Days": max_c, "Crash Cost / Day (Slope)": round(slope, 2) if slope != float("inf") else "N/A"})
 
-            st.markdown("<h4>📋 جدول ميل تكلفة الضغط لليوم الواحد | Crash Cost Slope Table:</h4>", unsafe_allow_html=True)
             st.dataframe(pd.DataFrame(slope_rows), use_container_width=True)
 
             def eval_cpm_simple(t_dict):
@@ -777,9 +808,8 @@ with TABS[0]:
                 "Total Project Cost": curr_direct + curr_dur * indirect_cost_day,
                 "Critical Activities": ", ".join([k for k in c_keys if c_tasks[k]["crit"]]),
             }]
-
             step_i = 1
-            while curr_dur > target_crash_dur and step_i <= 30:
+            while curr_dur > target_crash_dur and step_i <= 40:
                 crit_cands = [k for k in c_keys if c_tasks[k]["crit"] and c_tasks[k]["dur"] > c_tasks[k]["min_dur"]]
                 if not crit_cands:
                     break
@@ -789,7 +819,7 @@ with TABS[0]:
                 curr_direct += added_c
                 curr_dur = eval_cpm_simple(c_tasks)
                 crash_steps.append({
-                    "Step": step_i, "Crashed Activity": f"{best_k} (-1 day)",
+                    "Step": step_i, "Crashed Activity": f"{best_k} (-1)",
                     "Project Duration": curr_dur, "Added Crash Cost": round(added_c, 2),
                     "Total Direct Cost": round(curr_direct, 2),
                     "Indirect Cost": round(curr_dur * indirect_cost_day, 2),
@@ -797,19 +827,49 @@ with TABS[0]:
                     "Critical Activities": ", ".join([k for k in c_keys if c_tasks[k]["crit"]]),
                 })
                 step_i += 1
-
             df_cr_steps = pd.DataFrame(crash_steps)
-            st.markdown("<h4>📉 خطوات الضغط الأمثل للمشروع والتكلفة الكلية | Optimal Crashing Steps:</h4>", unsafe_allow_html=True)
             st.dataframe(df_cr_steps, use_container_width=True)
             opt_row = df_cr_steps.loc[df_cr_steps["Total Project Cost"].idxmin()]
-            st.success(f"🏆 **Optimal Minimum-Cost Duration:** `{opt_row['Project Duration']} days` with Minimum Total Cost = `${opt_row['Total Project Cost']:,.2f}`")
+            st.success(f"🏆 **Optimal Minimum-Cost Duration:** `{opt_row['Project Duration']}` | **Minimum Total Cost:** `${opt_row['Total Project Cost']:,.2f}`")
 
-    elif "7. PERT" not in pm_preset:
-        st.markdown("<h4>📋 1. الجدول التفاعلي لأنشطة المشروع | Interactive Project Activities Table:</h4>", unsafe_allow_html=True)
-        if "Vertical" in table_orient:
+    elif "3. Custom PERT" in pm_preset:
+        pert_init = pd.DataFrame([
+            {"Activity": "A", "Predecessors": "-", "Optimistic (to)": 3.0, "Most Likely (tm)": 5.0, "Pessimistic (tp)": 13.0},
+            {"Activity": "B", "Predecessors": "A", "Optimistic (to)": 4.0, "Most Likely (tm)": 6.0, "Pessimistic (tp)": 8.0},
+            {"Activity": "C", "Predecessors": "A", "Optimistic (to)": 5.0, "Most Likely (tm)": 8.0, "Pessimistic (tp)": 17.0},
+            {"Activity": "D", "Predecessors": "B, C", "Optimistic (to)": 2.0, "Most Likely (tm)": 4.0, "Pessimistic (tp)": 6.0},
+        ])
+        edited_pert = st.data_editor(pert_init, num_rows="dynamic", use_container_width=True, key="pert_table_editor")
+        td_val = st.number_input("🎯 Target Project Deadline (Td):", value=22.0)
+        if st.button("⚙️ Solve PERT Network, Critical Path & Z-Probability", type="primary"):
+            edited_pert["Expected Time (te)"] = (edited_pert["Optimistic (to)"] + 4.0 * edited_pert["Most Likely (tm)"] + edited_pert["Pessimistic (tp)"]) / 6.0
+            edited_pert["Std Dev (σ)"] = (edited_pert["Pessimistic (tp)"] - edited_pert["Optimistic (to)"]) / 6.0
+            edited_pert["Variance (σ²)"] = edited_pert["Std Dev (σ)"] ** 2
+            st.dataframe(edited_pert, use_container_width=True)
+            te_sum = float(edited_pert["Expected Time (te)"].sum())
+            var_sum = float(edited_pert["Variance (σ²)"].sum())
+            sd_tot = math.sqrt(var_sum)
+            z_sc = (td_val - te_sum) / sd_tot if sd_tot > 0 else 0.0
+            st.success(f"📈 **Expected Sum ($T_e$):** `{te_sum:.2f}` | **Z-Score:** `{z_sc:.4f}` | **Probability $P(T \\le {td_val})$:** `{norm_cdf(z_sc)*100:.2f}%`")
+
+    else:
+        st.caption(
+            "💡 **إدخال حر لأي مسألة:** يمكنك تعديل أي خلية أو إضافة/حذف صفوف، كما يمكنك كتابة الـ Lags مباشرة داخل خانة Predecessors أو Successors بصيغة `A:SS+3` أو `B:FF+2` أو في جدول الـ Lags بالأسفل."
+        )
+        col_btn_clr, _ = st.columns([1.3, 4])
+        if col_btn_clr.button("🗑️ تفريغ الجدول لمسألة جديدة فارغة"):
+            letters_blank = [chr(65 + i) for i in range(int(custom_n_acts))]
+            st.session_state.custom_tables["tab1_pm_df"] = pd.DataFrame([
+                {"Activity": a, "Description": "", "Predecessors": "-", "Successors": "-", "Activity Time": 1.0}
+                for a in letters_blank
+            ])
+            st.rerun()
+
+        if "رأسي" in table_orient:
             edited_pm_df = st.data_editor(init_pm_df, num_rows="dynamic", use_container_width=True, key="pm_vert_editor")
         else:
-            horiz_init = init_pm_df.set_index("Activity")[["Predecessors" if "Predecessors" in dep_mode else "Successors", "Activity Time"]].T
+            col_to_use = "Successors" if "Successors" in dep_mode else "Predecessors"
+            horiz_init = init_pm_df.set_index("Activity")[[col_to_use, "Activity Time"]].T
             edited_horiz = st.data_editor(horiz_init, use_container_width=True, key="pm_horiz_editor")
             reconstructed = []
             for col_act in edited_horiz.columns:
@@ -818,16 +878,16 @@ with TABS[0]:
                 reconstructed.append({
                     "Activity": str(col_act),
                     "Description": str(col_act),
-                    "Predecessors": dep_val if "Predecessors" in dep_mode else "-",
-                    "Successors": dep_val if "Successors" in dep_mode else "-",
+                    "Predecessors": dep_val if col_to_use == "Predecessors" else "-",
+                    "Successors": dep_val if col_to_use == "Successors" else "-",
                     "Activity Time": t_val,
                 })
             edited_pm_df = pd.DataFrame(reconstructed)
 
-        with st.expander("🔗 جدول علاقات التأخير والتداخل (Lags Table: FS, SS, FF, SF) — اضغط للفتح أو التعديل", expanded=("Lag" in pm_preset or "6.21" in pm_preset)):
+        with st.expander("🔗 جدول علاقات الـ Lags الإضافي (FS, SS, FF, SF) — اختياري", expanded=("Lag" in pm_preset or "6.21" in pm_preset)):
             edited_lags_df = st.data_editor(init_lags_df, num_rows="dynamic", use_container_width=True, key="pm_lags_editor")
 
-        if st.button("⚙️ Solve Network Table & Generate AON (9-Cell Split-Critical) / AOA / SVG", type="primary"):
+        if st.button("⚙️ حل المسألة ورسم الشبكات (Solve Any Network & Draw AON / AOA)", type="primary"):
             try:
                 tasks = {}
                 order_keys = []
@@ -845,7 +905,26 @@ with TABS[0]:
                     }
                     order_keys.append(act_id)
 
+                has_any_preds = any(
+                    str(r.get("Predecessors", "-")).strip() not in ["-", "None", "nan", ""]
+                    for _, r in edited_pm_df.iterrows()
+                )
+                has_any_succs = any(
+                    str(r.get("Successors", "-")).strip() not in ["-", "None", "nan", ""]
+                    for _, r in edited_pm_df.iterrows()
+                )
+
+                use_preds = True
+                use_succs = False
                 if "Predecessors" in dep_mode:
+                    use_preds, use_succs = True, False
+                elif "Successors" in dep_mode:
+                    use_preds, use_succs = False, True
+                else:
+                    use_preds = has_any_preds
+                    use_succs = has_any_succs and not has_any_preds
+
+                if use_preds:
                     for _, row in edited_pm_df.iterrows():
                         act_id = str(row["Activity"]).strip()
                         if act_id not in tasks:
@@ -853,10 +932,11 @@ with TABS[0]:
                         raw_p = str(row.get("Predecessors", "-")).strip()
                         if raw_p and raw_p not in ["-", "None", "nan", ""]:
                             for p_tok in raw_p.split(","):
-                                p_clean = p_tok.strip()
-                                if p_clean in tasks:
-                                    tasks[act_id]["preds"].append([p_clean, "FS", 0.0])
-                else:
+                                parsed = parse_inline_dep_token(p_tok)
+                                if parsed and parsed[0] in tasks:
+                                    tasks[act_id]["preds"].append([parsed[0], parsed[1], parsed[2]])
+
+                if use_succs:
                     for _, row in edited_pm_df.iterrows():
                         act_id = str(row["Activity"]).strip()
                         if act_id not in tasks:
@@ -864,9 +944,9 @@ with TABS[0]:
                         raw_s = str(row.get("Successors", "-")).strip()
                         if raw_s and raw_s not in ["-", "None", "nan", ""]:
                             for s_tok in raw_s.split(","):
-                                s_clean = s_tok.strip()
-                                if s_clean in tasks:
-                                    tasks[s_clean]["preds"].append([act_id, "FS", 0.0])
+                                parsed = parse_inline_dep_token(s_tok)
+                                if parsed and parsed[0] in tasks:
+                                    tasks[parsed[0]]["preds"].append([act_id, parsed[1], parsed[2]])
 
                 for _, lrow in edited_lags_df.iterrows():
                     u_a = str(lrow.get("From Activity", "")).strip()
@@ -885,9 +965,9 @@ with TABS[0]:
 
                 has_cyc, cyc_nodes, st_nodes, end_nodes = detect_network_cycles_and_dangling(tasks, order_keys)
                 if has_cyc:
-                    st.error(f"🚨 **Network Loop Detected | تم اكتشاف مسار دائري مغلق في الشبكة:** `{' ➔ '.join(cyc_nodes)}`")
+                    st.error(f"🚨 **تم اكتشاف مسار دائري مغلق (Loop):** `{' ➔ '.join(cyc_nodes)}`")
                 else:
-                    st.caption(f"✅ **Network Integrity Check:** Start Activities = `{st_nodes}` | End Activities = `{end_nodes}` (Zero Loops)")
+                    st.caption(f"✅ **فحص الشبكة:** أنشطة البداية = `{st_nodes}` | أنشطة النهاية = `{end_nodes}`")
 
                 for _ in range(len(order_keys) + 4):
                     for t_id in order_keys:
@@ -957,10 +1037,10 @@ with TABS[0]:
                         c_status = "🔴 Full Critical (Start & Finish)"
                     elif d["crit_start"]:
                         crit_partial.append(f"{k} (Start Only)")
-                        c_status = "🟠 Start Only on Critical Path"
+                        c_status = "🟠 Start Only Critical"
                     elif d["crit_finish"]:
                         crit_partial.append(f"{k} (Finish Only)")
-                        c_status = "🟠 Finish Only on Critical Path"
+                        c_status = "🟠 Finish Only Critical"
                     else:
                         c_status = "🟢 Non-Critical"
 
@@ -981,8 +1061,8 @@ with TABS[0]:
 
                     out_rows.append({
                         "Activity": k,
-                        "Description": d["desc"],
                         "Duration (DUR)": d["dur"],
+                        "Predecessors Used": ", ".join([f"{p}({rt}{lg:+g})" for p, rt, lg in d["preds"]]) or "-",
                         "ES": d["ES"],
                         "EF": d["EF"],
                         "LS": d["LS"],
@@ -994,55 +1074,34 @@ with TABS[0]:
                     })
 
                 m1, m2, m3 = st.columns(3)
-                m1.success(f"⏱️ **Total Time:** `{proj_dur:g}`")
+                m1.success(f"⏱️ **Total Project Time:** `{proj_dur:g}`")
                 m2.error(f"🔥 **Critical Path:** `{' ➔ '.join(crit_full)}`")
                 if crit_partial:
-                    m3.warning(f"⚡ **Start/Finish Only Critical:** `{', '.join(crit_partial)}`")
+                    m3.warning(f"⚡ **Partial Critical (Start/Finish Only):** `{', '.join(crit_partial)}`")
                 else:
-                    m3.info("✅ All critical activities have both Start & Finish critical.")
+                    m3.info("✅ All critical nodes have both Start & Finish critical.")
 
-                st.markdown("<h4>📊 جدول المخرجات الكامل (Detailed Schedule & Floats Table):</h4>", unsafe_allow_html=True)
                 st.dataframe(pd.DataFrame(out_rows), use_container_width=True)
 
                 aon_svg_str = build_aon_9cell_svg(tasks, order_keys)
-                st.markdown("<h4>📐 1. رسم شبكة AON بصندوق الـ 9 خانات وتلوين البداية/النهاية الحرجة (Split-Critical 9-Cell Box):</h4>", unsafe_allow_html=True)
+                st.markdown("<h4>📐 1. رسم شبكة AON (صندوق الـ 9 خانات القياسي):</h4>", unsafe_allow_html=True)
                 st.markdown(aon_svg_str, unsafe_allow_html=True)
-                st.download_button("📥 Download AON Diagram (.svg)", aon_svg_str.encode("utf-8"), "AON_Network.svg", "image/svg+xml")
+                st.download_button("📥 Download AON (.svg)", aon_svg_str.encode("utf-8"), "AON_Network.svg", "image/svg+xml")
 
                 aoa_svg_str = build_aoa_slide_svg(tasks, order_keys, proj_dur)
-                st.markdown("<h4>🏹 2. رسم شبكة الأسهم (AOA Network - Forward/Backward Pass & Slack Boxes):</h4>", unsafe_allow_html=True)
+                st.markdown("<h4>🏹 2. رسم شبكة الأسهم (AOA Network):</h4>", unsafe_allow_html=True)
                 st.markdown(aoa_svg_str, unsafe_allow_html=True)
-                st.download_button("📥 Download AOA Diagram (.svg)", aoa_svg_str.encode("utf-8"), "AOA_Network.svg", "image/svg+xml")
+                st.download_button("📥 Download AOA (.svg)", aoa_svg_str.encode("utf-8"), "AOA_Network.svg", "image/svg+xml")
 
                 add_log("Project Management", pm_preset, edited_pm_df.to_dict(), f"Total Time={proj_dur}, CP={crit_full}")
             except Exception as err:
                 st.error(f"❌ Error solving network: {err}")
 
-    else:
-        pert_init = pd.DataFrame([
-            {"Activity": "A", "Optimistic (to)": 3.0, "Most Likely (tm)": 5.0, "Pessimistic (tp)": 13.0},
-            {"Activity": "B", "Optimistic (to)": 4.0, "Most Likely (tm)": 6.0, "Pessimistic (tp)": 8.0},
-            {"Activity": "C", "Optimistic (to)": 5.0, "Most Likely (tm)": 8.0, "Pessimistic (tp)": 17.0},
-            {"Activity": "D", "Optimistic (to)": 2.0, "Most Likely (tm)": 4.0, "Pessimistic (tp)": 6.0},
-        ])
-        edited_pert = st.data_editor(pert_init, num_rows="dynamic", use_container_width=True, key="pert_table_editor")
-        td_val = st.number_input("🎯 Target Project Deadline (Td):", value=25.0)
-        if st.button("⚙️ Compute PERT Table & Probability", type="primary"):
-            edited_pert["Expected Time (te)"] = (edited_pert["Optimistic (to)"] + 4.0 * edited_pert["Most Likely (tm)"] + edited_pert["Pessimistic (tp)"]) / 6.0
-            edited_pert["Std Dev (σ)"] = (edited_pert["Pessimistic (tp)"] - edited_pert["Optimistic (to)"]) / 6.0
-            edited_pert["Variance (σ²)"] = edited_pert["Std Dev (σ)"] ** 2
-            st.dataframe(edited_pert, use_container_width=True)
-            te_sum = float(edited_pert["Expected Time (te)"].sum())
-            var_sum = float(edited_pert["Variance (σ²)"].sum())
-            sd_tot = math.sqrt(var_sum)
-            z_sc = (td_val - te_sum) / sd_tot if sd_tot > 0 else 0.0
-            st.success(f"📈 **Expected Total Time ($T_e$):** `{te_sum:.2f}` | **Z-Score:** `{z_sc:.4f}` | **Probability:** `{norm_cdf(z_sc)*100:.2f}%`")
-
     render_camera_ai_section(
         "tab1_pm",
         "إدارة المشروعات والشبكات (Project Management: AON / AOA / Lags / Crashing / PERT)",
-        "حل مسائل شبكات الأعمال AON و AOA، العلاقات FS, SS, FF, SF مع الـ Lags، ضغط المشروعات Crashing، وترتيب المسار الحرج.",
-        lambda: "Project Management Table",
+        "حل أي مسألة شبكات أعمال AON و AOA، العلاقات FS, SS, FF, SF مع الـ Lags، ضغط المشروعات Crashing، وترتيب المسار الحرج.",
+        lambda: edited_pm_df.to_string() if "edited_pm_df" in locals() else "Project Network",
         table_state_key="tab1_pm_df",
         table_cols=["Activity", "Description", "Predecessors", "Successors", "Activity Time"],
     )
@@ -1051,76 +1110,73 @@ with TABS[0]:
 with TABS[1]:
     st.markdown("""
     <div class='sec-header'>
-        <h3>💰 2. الفوائد، حساسية الـ NPV، وفترة الاسترداد | Engineering Economy, Multi-Project NPV & Sensitivity</h3>
-        <p>جدول المقارنة بين المشروعات مع الفائدة والتضخم (مطابق لـ <b>Example, Problem 6, page 52 — Broken Arrow Records</b>) مع حسابات <b>NPV, IRR, Simple & Discounted Payback</b> ورسم منحنى حساسية الـ <b>NPV Sensitivity Profile (0%–40%)</b>.</p>
+        <h3>💰 2. الحل العام لجميع مسائل الفوائد والاقتصاد الهندسي | Universal Engineering Economy Solver</h3>
+        <p>حدد <b>أي عدد من المشروعات</b> و<b>أي عدد من السنوات</b>، أو ابنِ <b>أي مسألة تدفقات نقدية عامة (P, F, A, G, g)</b> في فترات زمنية مختلفة لحساب القيمة المكافئة عند أي سنة.</p>
     </div>
     """, unsafe_allow_html=True)
 
     eco_mode_sel = st.radio(
-        "💰 Select Economy Table Mode | اختر نوع جدول الفوائد والاقتصاد الهندسي:",
+        "💰 Select Economy Solver Mode | اختر نوع مسألة الفوائد والاقتصاد الهندسي:",
         [
-            "1. Multi-Project NPV, IRR, Payback & Sensitivity Profile (Broken Arrow Slide Page 52)",
-            "2. Compound Interest Factors Interactive Table (F/P, P/F, P/A, A/P, P/G, A/G)",
-            "3. Depreciation Interactive Table (SL, SYD, DDB)",
+            "1. Universal Multi-Project NPV, IRR & Payback Table (حدد أي عدد مشروعات وسنوات + التضخم)",
+            "2. Universal Cash Flow & Equivalence Builder (حل أي مسألة فوائد عامة تجمع بين دفعات مفردة ومنتظمة ومتدرجة)",
+            "3. Compound Interest Factors & Depreciation Schedule (معاملات الفوائد وجداول الإهلاك SL, SYD, DDB)",
         ],
-        horizontal=True,
     )
 
     if eco_mode_sel.startswith("1."):
-        c_inf1, c_inf2, c_inf3 = st.columns(3)
-        with c_inf1:
-            req_ror = st.number_input("📈 Required Rate of Return (%) | معدل العائد المطلوب:", value=20.0, step=1.0)
-        with c_inf2:
-            inf_rate = st.number_input("🎈 Predicted Inflation Rate (%) | معدل التضخم المتوقع:", value=2.0, step=0.5)
-        with c_inf3:
-            comb_mode = st.selectbox(
-                "🧮 Combined Rate Formula | طريقة دمج الفائدة والتضخم:",
-                [
-                    "Additive Slide Formula (i = r + f = 20% + 2% = 22%)",
-                    "Exact Fisher Formula (i = r + f + r*f)",
-                ],
-            )
+        c_cfg1, c_cfg2, c_cfg3, c_cfg4, c_cfg5 = st.columns(5)
+        with c_cfg1:
+            num_projs = st.number_input("🔢 عدد المشروعات:", min_value=1, max_value=8, value=3, step=1)
+        with c_cfg2:
+            num_years = st.number_input("📅 عدد السنوات (N):", min_value=1, max_value=25, value=5, step=1)
+        with c_cfg3:
+            req_ror = st.number_input("📈 معدل العائد r (%):", value=20.0, step=1.0)
+        with c_cfg4:
+            inf_rate = st.number_input("🎈 معدل التضخم f (%):", value=2.0, step=0.5)
+        with c_cfg5:
+            load_slide_ex = st.checkbox("📚 تحميل أرقام مثال السلايد (Page 52)", value=False)
 
-        p1_name, p2_name, p3_name = st.columns(3)
-        with p1_name:
-            proj1_title = st.text_input("Project 1 Name:", value="Time Fades Away")
-        with p2_name:
-            proj2_title = st.text_input("Project 2 Name:", value="On the Beach")
-        with p3_name:
-            proj3_title = st.text_input("Project 3 Name:", value="Tonight's the Night")
+        if load_slide_ex and int(num_projs) == 3 and int(num_years) == 5:
+            p_titles = ["Time Fades Away", "On the Beach", "Tonight's the Night"]
+            init_npv_table = pd.DataFrame([
+                {"Year": 0, "Time Fades Away - Investment": 600000.0, "Time Fades Away - Revenue": 0.0, "On the Beach - Investment": 400000.0, "On the Beach - Revenue": 0.0, "Tonight's the Night - Investment": 200000.0, "Tonight's the Night - Revenue": 0.0},
+                {"Year": 1, "Time Fades Away - Investment": 0.0, "Time Fades Away - Revenue": 600000.0, "On the Beach - Investment": 0.0, "On the Beach - Revenue": 400000.0, "Tonight's the Night - Investment": 0.0, "Tonight's the Night - Revenue": 200000.0},
+                {"Year": 2, "Time Fades Away - Investment": 0.0, "Time Fades Away - Revenue": 75000.0, "On the Beach - Investment": 0.0, "On the Beach - Revenue": 100000.0, "Tonight's the Night - Investment": 0.0, "Tonight's the Night - Revenue": 125000.0},
+                {"Year": 3, "Time Fades Away - Investment": 0.0, "Time Fades Away - Revenue": 20000.0, "On the Beach - Investment": 0.0, "On the Beach - Revenue": 25000.0, "Tonight's the Night - Investment": 0.0, "Tonight's the Night - Revenue": 75000.0},
+                {"Year": 4, "Time Fades Away - Investment": 0.0, "Time Fades Away - Revenue": 15000.0, "On the Beach - Investment": 0.0, "On the Beach - Revenue": 20000.0, "Tonight's the Night - Investment": 0.0, "Tonight's the Night - Revenue": 20000.0},
+                {"Year": 5, "Time Fades Away - Investment": 0.0, "Time Fades Away - Revenue": 10000.0, "On the Beach - Investment": 0.0, "On the Beach - Revenue": 10000.0, "Tonight's the Night - Investment": 0.0, "Tonight's the Night - Revenue": 10000.0},
+            ])
+        else:
+            p_titles = [f"Project {j+1}" for j in range(int(num_projs))]
+            rows_dyn = []
+            for yr in range(int(num_years) + 1):
+                r_d = {"Year": yr}
+                for p_t in p_titles:
+                    r_d[f"{p_t} - Investment"] = 100000.0 if yr == 0 else 0.0
+                    r_d[f"{p_t} - Revenue"] = 0.0 if yr == 0 else 35000.0
+                rows_dyn.append(r_d)
+            init_npv_table = pd.DataFrame(rows_dyn)
 
-        init_npv_table = pd.DataFrame([
-            {"Year": 0, f"{proj1_title} - Investment": 600000.0, f"{proj1_title} - Revenue Stream": 0.0, f"{proj2_title} - Investment": 400000.0, f"{proj2_title} - Revenue Stream": 0.0, f"{proj3_title} - Investment": 200000.0, f"{proj3_title} - Revenue Stream": 0.0},
-            {"Year": 1, f"{proj1_title} - Investment": 0.0, f"{proj1_title} - Revenue Stream": 600000.0, f"{proj2_title} - Investment": 0.0, f"{proj2_title} - Revenue Stream": 400000.0, f"{proj3_title} - Investment": 0.0, f"{proj3_title} - Revenue Stream": 200000.0},
-            {"Year": 2, f"{proj1_title} - Investment": 0.0, f"{proj1_title} - Revenue Stream": 75000.0, f"{proj2_title} - Investment": 0.0, f"{proj2_title} - Revenue Stream": 100000.0, f"{proj3_title} - Investment": 0.0, f"{proj3_title} - Revenue Stream": 125000.0},
-            {"Year": 3, f"{proj1_title} - Investment": 0.0, f"{proj1_title} - Revenue Stream": 20000.0, f"{proj2_title} - Investment": 0.0, f"{proj2_title} - Revenue Stream": 25000.0, f"{proj3_title} - Investment": 0.0, f"{proj3_title} - Revenue Stream": 75000.0},
-            {"Year": 4, f"{proj1_title} - Investment": 0.0, f"{proj1_title} - Revenue Stream": 15000.0, f"{proj2_title} - Investment": 0.0, f"{proj2_title} - Revenue Stream": 20000.0, f"{proj3_title} - Investment": 0.0, f"{proj3_title} - Revenue Stream": 20000.0},
-            {"Year": 5, f"{proj1_title} - Investment": 0.0, f"{proj1_title} - Revenue Stream": 10000.0, f"{proj2_title} - Investment": 0.0, f"{proj2_title} - Revenue Stream": 10000.0, f"{proj3_title} - Investment": 0.0, f"{proj3_title} - Revenue Stream": 10000.0},
-        ])
         if "tab2_npv_df" in st.session_state.custom_tables:
             init_npv_table = st.session_state.custom_tables["tab2_npv_df"]
 
-        st.markdown("<h4>📋 جدول الاستثمارات والتدفقات النقدية للمشروعات (Interactive Multi-Project Cash Flow Table):</h4>", unsafe_allow_html=True)
-        edited_npv_df = st.data_editor(init_npv_table, num_rows="dynamic", use_container_width=True, key="npv_multi_editor")
+        edited_npv_df = st.data_editor(init_npv_table, num_rows="dynamic", use_container_width=True, key="npv_universal_editor")
 
-        if st.button("⚙️ Compute Step-by-Step NPV, IRR, Payback & Sensitivity Profile", type="primary"):
-            r_dec = req_ror / 100.0
-            f_dec = inf_rate / 100.0
-            k_disc = (r_dec + f_dec) if "Additive" in comb_mode else (r_dec + f_dec + r_dec * f_dec)
-            st.info(f"📌 **Combined Discount Rate ($i = r + f$):** `{k_disc*100:.2f}%` (`{k_disc:.4f}`)")
-
-            projects_list = [proj1_title, proj2_title, proj3_title]
+        if st.button("⚙️ Solve All Projects (NPV Equations, IRR, Payback & Priority)", type="primary"):
+            k_disc = (req_ror + inf_rate) / 100.0
+            st.info(f"📌 **Combined Discount Rate ($i = r + f$):** `{k_disc*100:.2f}%`")
             results_summary = []
             proj_cfs_map = {}
 
-            for p_title in projects_list:
+            for p_title in p_titles:
                 inv_col = f"{p_title} - Investment"
-                rev_col = f"{p_title} - Revenue Stream"
+                rev_col = f"{p_title} - Revenue"
                 npv_total = 0.0
                 terms_latex = []
                 cfs_list = []
-                cum_simple, cum_disc = 0.0, 0.0
-                payback_simple, payback_disc = None, None
+                cum_s, cum_d = 0.0, 0.0
+                pb_s, pb_d = None, None
 
                 for _, r_row in edited_npv_df.iterrows():
                     yr = int(r_row["Year"])
@@ -1131,22 +1187,20 @@ with TABS[1]:
                     pv_term = net_cf / ((1.0 + k_disc) ** yr)
                     npv_total += pv_term
 
-                    prev_s, prev_d = cum_simple, cum_disc
-                    cum_simple += net_cf
-                    cum_disc += pv_term
-                    if yr > 0 and prev_s < 0 and cum_simple >= 0 and payback_simple is None:
-                        payback_simple = (yr - 1) + abs(prev_s) / net_cf
-                    if yr > 0 and prev_d < 0 and cum_disc >= 0 and payback_disc is None:
-                        payback_disc = (yr - 1) + abs(prev_d) / pv_term
+                    ps, pd_prev = cum_s, cum_d
+                    cum_s += net_cf
+                    cum_d += pv_term
+                    if yr > 0 and ps < 0 and cum_s >= 0 and pb_s is None:
+                        pb_s = (yr - 1) + abs(ps) / net_cf
+                    if yr > 0 and pd_prev < 0 and cum_d >= 0 and pb_d is None:
+                        pb_d = (yr - 1) + abs(pd_prev) / pv_term
 
-                    if yr == 0:
-                        if net_cf != 0:
-                            terms_latex.append(f"{net_cf:,.0f}")
-                    else:
-                        if net_cf != 0:
-                            sign_str = "+" if net_cf > 0 else "-"
-                            pwr_str = f"^{{{yr}}}" if yr > 1 else ""
-                            terms_latex.append(f"{sign_str} {abs(net_cf):,.0f}\\frac{{1}}{{(1+{k_disc:g}){pwr_str}}}")
+                    if yr == 0 and net_cf != 0:
+                        terms_latex.append(f"{net_cf:,.0f}")
+                    elif yr > 0 and net_cf != 0:
+                        sign_str = "+" if net_cf > 0 else "-"
+                        pwr_str = f"^{{{yr}}}" if yr > 1 else ""
+                        terms_latex.append(f"{sign_str} {abs(net_cf):,.0f}\\frac{{1}}{{(1+{k_disc:g}){pwr_str}}}")
 
                 proj_cfs_map[p_title] = cfs_list
                 irr_est = 0.15
@@ -1157,18 +1211,16 @@ with TABS[1]:
                         break
                     irr_est -= f_v / df_v
 
-                eq_full = " ".join(terms_latex) + f" = \\${npv_total:,.2f}"
                 results_summary.append({
                     "Project": p_title, "NPV": npv_total, "IRR_pct": irr_est * 100.0,
-                    "Payback_Simple": f"{payback_simple:.2f} yrs" if payback_simple is not None else "> 5 yrs",
-                    "Payback_Disc": f"{payback_disc:.2f} yrs" if payback_disc is not None else "Never",
-                    "LaTeX": eq_full,
+                    "Payback_Simple": f"{pb_s:.2f} yrs" if pb_s is not None else "Not Reached",
+                    "Payback_Disc": f"{pb_d:.2f} yrs" if pb_d is not None else "Not Reached",
+                    "LaTeX": " ".join(terms_latex) + f" = \\${npv_total:,.2f}",
                 })
 
             funded_sorted = sorted([x for x in results_summary if x["NPV"] > 0], key=lambda item: item["NPV"], reverse=True)
             rank_map = {item["Project"]: idx + 1 for idx, item in enumerate(funded_sorted)}
 
-            st.markdown("<h4>🧮 معادلات صافي القيمة الحالية وترتيب الأولويات (Step-by-Step NPV Equations & Priority):</h4>", unsafe_allow_html=True)
             summary_table = []
             for item in results_summary:
                 p_name = item["Project"]
@@ -1182,35 +1234,77 @@ with TABS[1]:
                 st.markdown(f"**🔹 {p_name}:** {badge_html}", unsafe_allow_html=True)
                 st.latex(f"NPV = {item['LaTeX']}")
                 summary_table.append({
-                    "Project Name | اسم المشروع": p_name,
-                    "Net Present Value (NPV)": round(npv_v, 2),
+                    "Project": p_name,
+                    "NPV ($)": round(npv_v, 2),
                     "IRR (%)": round(item["IRR_pct"], 2),
                     "Simple Payback": item["Payback_Simple"],
                     "Discounted Payback": item["Payback_Disc"],
-                    "Decision | قرار التمويل": "Fund (تمويل)" if npv_v > 0 else "Do Not Fund (رفض)",
-                    "Priority Rank | ترتيب الأولوية": f"Priority {rk}" if rk else "Rejected",
+                    "Priority Rank": f"Priority {rk}" if rk else "Rejected",
                 })
             st.dataframe(pd.DataFrame(summary_table), use_container_width=True)
 
             rates_grid = np.linspace(0.0, 0.40, 21)
-            sens_rows = []
-            for r_g in rates_grid:
-                row_s = {"Discount Rate (%)": round(r_g * 100.0, 1)}
-                for p_title in projects_list:
-                    row_s[p_title] = sum(cf / ((1.0 + r_g) ** t) for t, cf in enumerate(proj_cfs_map[p_title]))
-                sens_rows.append(row_s)
-            st.markdown("<h4>📈 منحنى حساسية صافي القيمة الحالية للمشروعات (NPV Sensitivity Profile 0% to 40%):</h4>", unsafe_allow_html=True)
+            sens_rows = [{"Discount Rate (%)": round(rg * 100, 1), **{pt: sum(cf / ((1 + rg) ** t) for t, cf in enumerate(proj_cfs_map[pt])) for pt in p_titles}} for rg in rates_grid]
             st.line_chart(pd.DataFrame(sens_rows).set_index("Discount Rate (%)"))
-            add_log("Engineering Economy", "Multi-Project NPV Table", edited_npv_df.to_dict(), summary_table)
 
     elif eco_mode_sel.startswith("2."):
+        st.markdown("<h4>🧮 باني مسائل التدفقات النقدية العام (أدخل أي دفعات مفردة أو منتظمة أو متدرجة بأي توقيت):</h4>", unsafe_allow_html=True)
+        c_eq1, c_eq2, c_eq3 = st.columns(3)
+        with c_eq1:
+            gen_i = st.number_input("Interest Rate i (%):", value=10.0, step=0.5)
+        with c_eq2:
+            gen_horizon = st.number_input("Total Horizon N (Years):", value=10, min_value=1, max_value=60)
+        with c_eq3:
+            target_t = st.number_input("Target Equivalence Year (t_eq):", value=0, min_value=0, max_value=60)
+
+        init_gen_cf = pd.DataFrame([
+            {"ItemType (Single/Uniform/ArithGrad/GeomGrad)": "Single", "Amount ($)": -20000.0, "Start Year": 0, "End Year": 0, "Gradient G or g(%)": 0.0},
+            {"ItemType (Single/Uniform/ArithGrad/GeomGrad)": "Uniform", "Amount ($)": 5000.0, "Start Year": 1, "End Year": 6, "Gradient G or g(%)": 0.0},
+            {"ItemType (Single/Uniform/ArithGrad/GeomGrad)": "ArithGrad", "Amount ($)": 0.0, "Start Year": 1, "End Year": 6, "Gradient G or g(%)": 500.0},
+            {"ItemType (Single/Uniform/ArithGrad/GeomGrad)": "Single", "Amount ($)": 8000.0, "Start Year": 10, "End Year": 10, "Gradient G or g(%)": 0.0},
+        ])
+        ed_gen_cf = st.data_editor(init_gen_cf, num_rows="dynamic", use_container_width=True, key="gen_cf_builder")
+
+        if st.button("⚙️ Solve Universal Cash Flow Diagram & Find P0, FN, AW, and Value at t_eq", type="primary"):
+            i_r = gen_i / 100.0
+            N_tot = int(gen_horizon)
+            cf_timeline = np.zeros(N_tot + 1, dtype=float)
+            for _, row in ed_gen_cf.iterrows():
+                itype = str(row["ItemType (Single/Uniform/ArithGrad/GeomGrad)"]).strip().lower()
+                amt = float(row["Amount ($)"])
+                t1 = max(0, min(N_tot, int(row["Start Year"])))
+                t2 = max(t1, min(N_tot, int(row["End Year"])))
+                grad = float(row["Gradient G or g(%)"])
+                if "single" in itype:
+                    cf_timeline[t1] += amt
+                elif "uniform" in itype:
+                    for t in range(t1, t2 + 1):
+                        cf_timeline[t] += amt
+                elif "arith" in itype:
+                    for t in range(t1, t2 + 1):
+                        cf_timeline[t] += amt + grad * (t - t1)
+                elif "geom" in itype:
+                    g_r = grad / 100.0
+                    for t in range(t1, t2 + 1):
+                        cf_timeline[t] += amt * ((1.0 + g_r) ** (t - t1))
+
+            pw_0 = sum(cf_timeline[t] / ((1.0 + i_r) ** t) for t in range(N_tot + 1))
+            fw_N = pw_0 * ((1.0 + i_r) ** N_tot)
+            val_at_teq = pw_0 * ((1.0 + i_r) ** int(target_t))
+            ap_f = (i_r * ((1.0 + i_r) ** N_tot)) / (((1.0 + i_r) ** N_tot) - 1.0) if i_r > 0 else (1.0 / N_tot)
+            aw_all = pw_0 * ap_f
+
+            st.latex(f"P_0 = {pw_0:,.2f}, \\quad F_{{{N_tot}}} = {fw_N:,.2f}, \\quad A_{{1..{N_tot}}} = {aw_all:,.2f}, \\quad V_{{t={int(target_t)}}} = {val_at_teq:,.2f}")
+            df_tl = pd.DataFrame({"Year (t)": range(N_tot + 1), "Net Cash Flow ($)": np.round(cf_timeline, 2), "Present Worth at t=0": [round(cf_timeline[t] / ((1 + i_r) ** t), 2) for t in range(N_tot + 1)]})
+            st.dataframe(df_tl, use_container_width=True)
+            st.bar_chart(df_tl.set_index("Year (t)")["Net Cash Flow ($)"])
+
+    else:
         init_factors_df = pd.DataFrame([
-            {"Case": "Case 1", "Interest i (%)": 10.0, "Periods n": 5, "Present (P)": 10000.0, "Future (F)": 0.0, "Uniform (A)": 0.0, "Gradient (G)": 0.0},
-            {"Case": "Case 2", "Interest i (%)": 12.0, "Periods n": 8, "Present (P)": 0.0, "Future (F)": 0.0, "Uniform (A)": 2500.0, "Gradient (G)": 300.0},
-            {"Case": "Case 3", "Interest i (%)": 8.0, "Periods n": 10, "Present (P)": 0.0, "Future (F)": 50000.0, "Uniform (A)": 0.0, "Gradient (G)": 0.0},
+            {"Case": "Custom 1", "Interest i (%)": 10.0, "Periods n": 5, "Present (P)": 10000.0, "Future (F)": 0.0, "Uniform (A)": 0.0, "Gradient (G)": 0.0},
         ])
         edited_fac_in = st.data_editor(init_factors_df, num_rows="dynamic", use_container_width=True, key="eco_fac_editor")
-        if st.button("⚙️ Compute Interest Factors & Equivalent P, F, A for All Rows", type="primary"):
+        if st.button("⚙️ Compute Interest Factors & Equivalent Values", type="primary"):
             out_fac_rows = []
             for _, r in edited_fac_in.iterrows():
                 i = float(r["Interest i (%)"]) / 100.0
@@ -1226,47 +1320,19 @@ with TABS[1]:
                 p_eq = float(r["Present (P)"]) + float(r["Future (F)"]) * pf + float(r["Uniform (A)"]) * pa + float(r["Gradient (G)"]) * pg
                 out_fac_rows.append({
                     "Case": r["Case"], "i (%)": r["Interest i (%)"], "n": n,
-                    "(F/P)": round(fp, 4), "(P/F)": round(pf, 4),
-                    "(P/A)": round(pa, 4), "(A/P)": round(ap, 4),
-                    "(F/A)": round(fa, 4), "(A/F)": round(af, 4),
-                    "(P/G)": round(pg, 4), "(A/G)": round(ag, 4),
-                    "Total Equivalent PW (P)": round(p_eq, 2),
-                    "Total Equivalent FW (F)": round(p_eq * fp, 2),
-                    "Total Equivalent AW (A)": round(p_eq * ap, 2),
+                    "(F/P)": round(fp, 5), "(P/F)": round(pf, 5),
+                    "(P/A)": round(pa, 5), "(A/P)": round(ap, 5),
+                    "(F/A)": round(fa, 5), "(A/F)": round(af, 5),
+                    "(P/G)": round(pg, 5), "(A/G)": round(ag, 5),
+                    "Equivalent PW": round(p_eq, 2), "Equivalent FW": round(p_eq * fp, 2), "Equivalent AW": round(p_eq * ap, 2),
                 })
             st.dataframe(pd.DataFrame(out_fac_rows), use_container_width=True)
 
-    else:
-        dep_in_df = pd.DataFrame([
-            {"Asset": "Machine A", "Initial Cost (B)": 100000.0, "Salvage Value (S)": 10000.0, "Useful Life (N)": 5},
-        ])
-        ed_dep_in = st.data_editor(dep_in_df, num_rows="dynamic", use_container_width=True, key="dep_in_editor")
-        if st.button("⚙️ Generate Full Depreciation Schedule Table", type="primary"):
-            r0 = ed_dep_in.iloc[0]
-            B_v, S_v, N_v = float(r0["Initial Cost (B)"]), float(r0["Salvage Value (S)"]), int(r0["Useful Life (N)"])
-            syd_s = N_v * (N_v + 1) / 2.0
-            bv_sl, bv_syd, bv_ddb = B_v, B_v, B_v
-            d_rows = []
-            for yr in range(1, N_v + 1):
-                dsl = (B_v - S_v) / N_v
-                bv_sl -= dsl
-                dsyd = ((N_v - yr + 1) / syd_s) * (B_v - S_v)
-                bv_syd -= dsyd
-                dddb = min((2.0 / N_v) * bv_ddb, max(0.0, bv_ddb - S_v))
-                bv_ddb -= dddb
-                d_rows.append({
-                    "Year": yr,
-                    "SL Depr.": round(dsl, 2), "SL Book Value": round(bv_sl, 2),
-                    "SYD Depr.": round(dsyd, 2), "SYD Book Value": round(bv_syd, 2),
-                    "DDB Depr.": round(dddb, 2), "DDB Book Value": round(bv_ddb, 2),
-                })
-            st.dataframe(pd.DataFrame(d_rows), use_container_width=True)
-
     render_camera_ai_section(
         "tab2_eco",
-        "الفوائد وتقييم المشروعات والاقتصاد الهندسي (NPV, IRR, Inflation & Interest Tables)",
-        "حل مسائل تقييم المشروعات وحسابات NPV مع التضخم وترتيب الأولويات، جداول التدفقات النقدية، معاملات الفوائد المركبة، والإهلاك.",
-        lambda: "Engineering Economy Table",
+        "الفوائد وتقييم المشروعات والاقتصاد الهندسي (Universal Engineering Economy)",
+        "حل أي مسألة اقتصاد هندسي وفوائد مركبة، تقييم المشروعات NPV, IRR, Payback, B/C، التضخم، والإهلاك.",
+        lambda: "Economy Problem",
         table_state_key="tab2_npv_df",
         table_cols=list(init_npv_table.columns) if eco_mode_sel.startswith("1.") else None,
     )
@@ -1275,38 +1341,47 @@ with TABS[1]:
 with TABS[2]:
     st.markdown("""
     <div class='sec-header'>
-        <h3>🧮 3. الجداول التفاعلية للطرق العددية ونسب الخطأ المئوية | Numerical Methods & Relative Error (%)</h3>
-        <p>جداول تفاعلية لحل الأنظمة الخطية (<b>Gauss-Seidel & Jacobi</b>) مع حساب الخطأ النسبي التقريبي والحقيقي ($\varepsilon_a\%, \varepsilon_t\%$)، وجدول الفروق المقسومة لنيوتن والتكامل العددي، وجدول <b>Euler / Heun / RK4</b>.</p>
+        <h3>🧮 3. الحل العام لجميع مسائل الطرق العددية | Universal Numerical Methods Solver</h3>
+        <p>حدد <b>حجم النظام $N \times N$</b> لأي عدد من المعادلات الخطية، أو أدخل <b>أي دالة غير خطية $f(x)$</b>، أو <b>أي جدول نقاط $(x, y)$</b> للاستكمال والتكامل العددي وتوفيق المنحنيات، أو <b>أي معادلة تفاضلية</b>.</p>
     </div>
     """, unsafe_allow_html=True)
 
     num_mode_tab = st.radio(
-        "🧮 Select Numerical Table | اختر جدول الطرق العددية:",
+        "🧮 Select Numerical Solver | اختر نوع مسألة الطرق العددية:",
         [
-            "1. Augmented Matrix Table [A | B] (Gauss-Seidel, Jacobi & Relative Error %)",
-            "2. Tabular Data Points (x, y) for Interpolation (Newton Divided Differences) & Integration",
-            "3. Root Finding & RK4 ODE Parameters Table with Relative Error (%)",
+            "1. Universal Linear System N×N [A | B] (Gauss-Seidel, Jacobi, SOR, Gaussian Elimination, LU & Cramer)",
+            "2. Universal Root Finder (Bisection, False Position, Newton-Raphson, Secant, Fixed-Point g(x))",
+            "3. Universal Tabular Data (Newton Divided Differences, Lagrange, Least-Squares Regression & Integration)",
+            "4. Universal ODE Initial Value Problem (Euler, Heun RK2, Midpoint & Runge-Kutta RK4)",
         ],
-        horizontal=True,
     )
 
     if num_mode_tab.startswith("1."):
-        init_mat_df = pd.DataFrame([
-            {"x1": 10.0, "x2": -1.0, "x3": 2.0, "x4": 0.0, "Constant B": 6.0},
-            {"x1": -1.0, "x2": 11.0, "x3": -1.0, "x4": 3.0, "Constant B": 25.0},
-            {"x1": 2.0, "x2": -1.0, "x3": 10.0, "x4": -1.0, "Constant B": -11.0},
-            {"x1": 0.0, "x2": 3.0, "x3": -1.0, "x4": 8.0, "Constant B": 15.0},
-        ])
-        if "tab3_mat_df" in st.session_state.custom_tables:
-            init_mat_df = st.session_state.custom_tables["tab3_mat_df"]
-        ed_mat_df = st.data_editor(init_mat_df, num_rows="dynamic", use_container_width=True, key="num_mat_editor")
-        c_gs1, c_gs2 = st.columns(2)
-        with c_gs1:
-            iter_algo = st.selectbox("Iterative Method:", ["Gauss-Seidel", "Jacobi"])
-        with c_gs2:
-            auto_piv = st.checkbox("Auto-Pivoting for Diagonal Dominance", value=True)
+        c_n1, c_n2, c_n3, c_n4 = st.columns(4)
+        with c_n1:
+            sys_dim_n = st.number_input("🔢 عدد المعادلات (N):", min_value=2, max_value=10, value=3, step=1)
+        with c_n2:
+            iter_algo = st.selectbox("الخوارزمية:", ["Gauss-Seidel", "Jacobi", "Direct LU & Cramer's Rule"])
+        with c_n3:
+            sor_omega = st.number_input("معامل الاسترخاء (ω):", value=1.0, min_value=0.1, max_value=1.95, step=0.05)
+        with c_n4:
+            tol_eps = st.number_input("نسبة الخطأ المسموحة (%):", value=0.001, format="%.5f")
 
-        if st.button("⚙️ Solve Matrix Table & Show Iteration Error (%) Table", type="primary"):
+        n_int_dim = int(sys_dim_n)
+        default_mat_rows = []
+        for i in range(n_int_dim):
+            r_dict = {f"x{j+1}": (10.0 if i == j else -1.0) for j in range(n_int_dim)}
+            r_dict["Constant B"] = float(i + 5)
+            default_mat_rows.append(r_dict)
+        init_mat_df = pd.DataFrame(default_mat_rows)
+
+        if "tab3_mat_df" in st.session_state.custom_tables and len(st.session_state.custom_tables["tab3_mat_df"].columns) == n_int_dim + 1:
+            init_mat_df = st.session_state.custom_tables["tab3_mat_df"]
+
+        ed_mat_df = st.data_editor(init_mat_df, num_rows="dynamic", use_container_width=True, key=f"num_mat_ed_{n_int_dim}")
+        auto_piv = st.checkbox("✅ تفعيل الترتيب التلقائي للصفوف لتحقيق القطر المهيمن (Auto-Pivoting)", value=True)
+
+        if st.button("⚙️ Solve N×N Linear System & Show Full Steps", type="primary"):
             M_arr = ed_mat_df.to_numpy(dtype=float)
             n_r = M_arr.shape[0]
             A_m = M_arr[:, :n_r].copy()
@@ -1315,43 +1390,101 @@ with TABS[2]:
                 for i in range(n_r):
                     mr = i + int(np.argmax(np.abs(A_m[i:, i])))
                     A_m[[i, mr]], B_v[[i, mr]] = A_m[[mr, i]], B_v[[mr, i]]
+
             exact_x = np.linalg.solve(A_m, B_v)
-            x_v = np.zeros(n_r)
-            iter_log = []
-            for it in range(1, 25):
-                x_old = x_v.copy()
-                for i in range(n_r):
-                    if iter_algo == "Gauss-Seidel":
-                        s1 = np.dot(A_m[i, :i], x_v[:i])
-                        s2 = np.dot(A_m[i, i + 1 :], x_old[i + 1 :])
-                        x_v[i] = (B_v[i] - s1 - s2) / A_m[i, i]
-                    else:
-                        s = np.dot(A_m[i, :], x_old) - A_m[i, i] * x_old[i]
-                        x_v[i] = (B_v[i] - s) / A_m[i, i]
-                ea_pct = float(np.max(np.abs((x_v - x_old) / np.where(np.abs(x_v) > 1e-12, x_v, 1.0)))) * 100.0
-                et_pct = float(np.max(np.abs((exact_x - x_v) / np.where(np.abs(exact_x) > 1e-12, exact_x, 1.0)))) * 100.0
-                iter_log.append({
-                    "Iteration": it,
-                    **{f"x{j+1}": round(x_v[j], 6) for j in range(n_r)},
-                    "Approx Error εa (%)": round(ea_pct, 5),
-                    "True Error εt (%)": round(et_pct, 5),
-                })
-                if ea_pct < 1e-4:
-                    break
-            st.dataframe(pd.DataFrame(iter_log), use_container_width=True)
-            st.success(f"🎯 **Exact Solution:** `{np.round(exact_x, 6)}`")
+            det_a = float(np.linalg.det(A_m))
+            st.info(f"📌 **Determinant $\\det(A) =$** `{det_a:.6f}` | **Exact Solution:** `{np.round(exact_x, 6)}`")
+
+            if "Direct" not in iter_algo:
+                x_v = np.zeros(n_r)
+                iter_log = []
+                for it in range(1, 50):
+                    x_old = x_v.copy()
+                    for i in range(n_r):
+                        if iter_algo == "Gauss-Seidel":
+                            s1 = np.dot(A_m[i, :i], x_v[:i])
+                            s2 = np.dot(A_m[i, i + 1 :], x_old[i + 1 :])
+                            x_gs = (B_v[i] - s1 - s2) / A_m[i, i]
+                            x_v[i] = (1.0 - sor_omega) * x_old[i] + sor_omega * x_gs
+                        else:
+                            s = np.dot(A_m[i, :], x_old) - A_m[i, i] * x_old[i]
+                            x_v[i] = (B_v[i] - s) / A_m[i, i]
+                    ea_pct = float(np.max(np.abs((x_v - x_old) / np.where(np.abs(x_v) > 1e-12, x_v, 1.0)))) * 100.0
+                    et_pct = float(np.max(np.abs((exact_x - x_v) / np.where(np.abs(exact_x) > 1e-12, exact_x, 1.0)))) * 100.0
+                    iter_log.append({
+                        "Iter": it,
+                        **{f"x{j+1}": round(x_v[j], 6) for j in range(n_r)},
+                        "εa (%)": round(ea_pct, 5),
+                        "εt (%)": round(et_pct, 5),
+                    })
+                    if ea_pct < tol_eps:
+                        break
+                st.dataframe(pd.DataFrame(iter_log), use_container_width=True)
 
     elif num_mode_tab.startswith("2."):
+        rc1, rc2, rc3, rc4, rc5 = st.columns(5)
+        with rc1:
+            r_method = st.selectbox("Method:", ["Newton-Raphson", "Bisection", "False Position", "Secant", "Fixed-Point x = g(x)"])
+        with rc2:
+            f_in_str = st.text_input("f(x) or g(x):", value="x**3 - 2*x - 5")
+        with rc3:
+            x0_in = st.number_input("a / x0:", value=2.0, format="%.4f")
+        with rc4:
+            x1_in = st.number_input("b / x1:", value=3.0, format="%.4f")
+        with rc5:
+            max_it_r = st.number_input("Max Iterations:", value=15, min_value=1, max_value=100)
+
+        if st.button("⚙️ Solve Root & Generate Iteration Table", type="primary"):
+            a, b = float(x0_in), float(x1_in)
+            r_rows = []
+            for it in range(1, int(max_it_r) + 1):
+                if r_method == "Newton-Raphson":
+                    fx = float(eval_math_expr(f_in_str, x=a))
+                    dfx = float(numerical_derivative(f_in_str, a))
+                    xn = a - fx / dfx
+                    ea = abs((xn - a) / xn) * 100.0 if xn != 0 else 0.0
+                    r_rows.append({"Iter": it, "x_i": round(a, 6), "f(x_i)": round(fx, 6), "f'(x_i)": round(dfx, 6), "x_{i+1}": round(xn, 6), "εa (%)": round(ea, 5)})
+                    a = xn
+                elif r_method == "Fixed-Point x = g(x)":
+                    xn = float(eval_math_expr(f_in_str, x=a))
+                    ea = abs((xn - a) / xn) * 100.0 if xn != 0 else 0.0
+                    r_rows.append({"Iter": it, "x_i": round(a, 6), "x_{i+1} = g(x_i)": round(xn, 6), "εa (%)": round(ea, 5)})
+                    a = xn
+                elif r_method in ["Bisection", "False Position"]:
+                    fa, fb = float(eval_math_expr(f_in_str, x=a)), float(eval_math_expr(f_in_str, x=b))
+                    xr = 0.5 * (a + b) if r_method == "Bisection" else (b - fb * (b - a) / (fb - fa))
+                    fxr = float(eval_math_expr(f_in_str, x=xr))
+                    ea = abs(b - a) / abs(xr) * 50.0 if xr != 0 else 0.0
+                    r_rows.append({"Iter": it, "a": round(a, 6), "b": round(b, 6), "x_r": round(xr, 6), "f(x_r)": round(fxr, 6), "εa (%)": round(ea, 5)})
+                    if fa * fxr < 0:
+                        b = xr
+                    else:
+                        a = xr
+                else:
+                    fa, fb = float(eval_math_expr(f_in_str, x=a)), float(eval_math_expr(f_in_str, x=b))
+                    xn = b - fb * (b - a) / (fb - fa)
+                    ea = abs((xn - b) / xn) * 100.0 if xn != 0 else 0.0
+                    r_rows.append({"Iter": it, "x_{i-1}": round(a, 6), "x_i": round(b, 6), "x_{i+1}": round(xn, 6), "f(x_{i+1})": round(float(eval_math_expr(f_in_str, x=xn)), 6), "εa (%)": round(ea, 5)})
+                    a, b = b, xn
+                if ea < 1e-5:
+                    break
+            st.dataframe(pd.DataFrame(r_rows), use_container_width=True)
+
+    elif num_mode_tab.startswith("3."):
         init_pts_df = pd.DataFrame([
             {"x": 0.0, "y = f(x)": 1.0},
-            {"x": 1.0, "y = f(x)": 2.0},
+            {"x": 1.0, "y = f(x)": 2.5},
             {"x": 2.0, "y = f(x)": 5.0},
-            {"x": 3.0, "y = f(x)": 10.0},
-            {"x": 4.0, "y = f(x)": 17.0},
+            {"x": 3.0, "y = f(x)": 10.5},
         ])
         ed_pts_df = st.data_editor(init_pts_df, num_rows="dynamic", use_container_width=True, key="num_pts_editor")
-        x_eval_pt = st.number_input("🎯 Value of x to Interpolate f(x):", value=2.5)
-        if st.button("⚙️ Build Divided Differences Table & Integrate Tabular Data", type="primary"):
+        c_p1, c_p2 = st.columns(2)
+        with c_p1:
+            x_eval_pt = st.number_input("🎯 قيمة x المطلوب حساب f(x) عندها:", value=1.5)
+        with c_p2:
+            reg_deg = st.number_input("📈 درجة كثيرة حدود Regression (Least-Squares):", value=2, min_value=1, max_value=6)
+
+        if st.button("⚙️ Solve Divided Differences, Lagrange, Regression & Integration", type="primary"):
             xv = ed_pts_df["x"].to_numpy(dtype=float)
             yv = ed_pts_df["y = f(x)"].to_numpy(dtype=float)
             n_p = len(xv)
@@ -1369,56 +1502,82 @@ with TABS[2]:
                 prod_term *= (x_eval_pt - xv[k - 1])
                 val_interp += dd[0, k + 1] * prod_term
             trap_tab = np.trapz(yv, xv)
-            st.success(f"📌 **Interpolated Value $P({x_eval_pt}) =$** `{val_interp:.6f}` | **Trapezoidal Integral $\\int y\\,dx =$** `{trap_tab:.6f}`")
+            poly_reg = np.polyfit(xv, yv, min(int(reg_deg), n_p - 1))
+            st.success(f"📌 **Interpolated $P({x_eval_pt}) =$** `{val_interp:.6f}` | **Trapezoidal Integral $\\int y\\,dx =$** `{trap_tab:.6f}` | **Least-Squares Poly Coeffs:** `{np.round(poly_reg, 5)}`")
 
     else:
         rk_in_df = pd.DataFrame([
             {"Function f(x, y)": "x + y", "x0": 0.0, "y0": 1.0, "Step h": 0.1, "Steps N": 10},
         ])
         ed_rk_df = st.data_editor(rk_in_df, use_container_width=True, key="rk_table_editor")
-        if st.button("⚙️ Generate Euler, Heun & RK4 Table", type="primary"):
+        if st.button("⚙️ Generate Euler, Heun (RK2), Midpoint & RK4 Table", type="primary"):
             r0 = ed_rk_df.iloc[0]
             f_str = str(r0["Function f(x, y)"])
-            xv, ye, yh, yrk = float(r0["x0"]), float(r0["y0"]), float(r0["y0"]), float(r0["y0"])
+            xv = float(r0["x0"])
+            ye = yh = ym = yrk = float(r0["y0"])
             h = float(r0["Step h"])
             steps = int(r0["Steps N"])
-            rows_ode = [{"Step": 0, "x": xv, "Euler y": ye, "Heun y": yh, "RK4 y": yrk, "|RK4 - Euler|": 0.0}]
+            rows_ode = [{"Step": 0, "x": xv, "Euler y": ye, "Heun (RK2) y": yh, "Midpoint y": ym, "RK4 y": yrk}]
             for s_i in range(1, steps + 1):
                 ye_n = ye + h * float(eval_math_expr(f_str, x=xv, y=ye))
                 k1h = float(eval_math_expr(f_str, x=xv, y=yh))
                 k2h = float(eval_math_expr(f_str, x=xv + h, y=yh + h * k1h))
                 yh_n = yh + 0.5 * h * (k1h + k2h)
+
+                k1m = float(eval_math_expr(f_str, x=xv, y=ym))
+                ym_n = ym + h * float(eval_math_expr(f_str, x=xv + 0.5 * h, y=ym + 0.5 * h * k1m))
+
                 k1 = h * float(eval_math_expr(f_str, x=xv, y=yrk))
                 k2 = h * float(eval_math_expr(f_str, x=xv + 0.5 * h, y=yrk + 0.5 * k1))
                 k3 = h * float(eval_math_expr(f_str, x=xv + 0.5 * h, y=yrk + 0.5 * k2))
                 k4 = h * float(eval_math_expr(f_str, x=xv + h, y=yrk + k3))
                 yrk_n = yrk + (k1 + 2 * k2 + 2 * k3 + k4) / 6.0
                 xv = round(xv + h, 5)
-                ye, yh, yrk = ye_n, yh_n, yrk_n
-                rows_ode.append({"Step": s_i, "x": xv, "Euler y": round(ye, 6), "Heun y": round(yh, 6), "RK4 y": round(yrk, 6), "|RK4 - Euler|": round(abs(yrk - ye), 6)})
+                ye, yh, ym, yrk = ye_n, yh_n, ym_n, yrk_n
+                rows_ode.append({"Step": s_i, "x": xv, "Euler y": round(ye, 6), "Heun (RK2) y": round(yh, 6), "Midpoint y": round(ym, 6), "RK4 y": round(yrk, 6)})
             st.dataframe(pd.DataFrame(rows_ode), use_container_width=True)
 
     render_camera_ai_section(
         "tab3_num",
-        "الطرق العددية والجداول التكرارية (Numerical Methods Tables)",
-        "حل مسائل الطرق العددية بالجداول الكاملة وحساب نسب الخطأ التقريبية والحقيقية.",
+        "الطرق العددية والجداول التكرارية (Universal Numerical Methods)",
+        "حل أي مسألة طرق عددية بالجداول الكاملة وحساب نسب الخطأ التقريبية والحقيقية.",
         lambda: num_mode_tab,
-        table_state_key="tab3_mat_df",
-        table_cols=["x1", "x2", "x3", "x4", "Constant B"],
     )
 
 
 with TABS[3]:
     st.markdown("""
     <div class='sec-header'>
-        <h3>📈 4. جدول المعادلات التفاضلية وتحويلات لابلاس | ODEs & Laplace Interactive Table</h3>
+        <h3>📈 4. الحل العام لتحويلات لابلاس والكسور الجزئية والمعادلات التفاضلية | Universal ODEs & Laplace Solver</h3>
+        <p>أدخل معاملات <b>أي دالة كسرية $F(s) = N(s)/D(s)$</b> لتفكيكها إلى كسور جزئية وإيجاد تحويل لابلاس العكسي $\mathcal{L}^{-1}\{F(s)\}$، أو حل <b>أي معادلة تفاضلية من أي رتبة</b>.</p>
     </div>
     """, unsafe_allow_html=True)
 
+    c_lap1, c_lap2 = st.columns(2)
+    with c_lap1:
+        num_lap_str = st.text_input("🔢 معاملات البسط Numerator N(s) (من أعلى أس إلى الحد المطلق):", value="2, 5")
+    with c_lap2:
+        den_lap_str = st.text_input("🔢 معاملات المقام Denominator D(s) (مثال s^2 + 5s + 6 ➔ 1, 5, 6):", value="1, 5, 6")
+
+    if st.button("⚙️ Decompose Partial Fractions & Find Inverse Laplace f(t)", type="primary"):
+        num_p = np.array([float(x.strip()) for x in num_lap_str.split(",") if x.strip()])
+        den_p = np.array([float(x.strip()) for x in den_lap_str.split(",") if x.strip()])
+        poles_s = np.roots(den_p)
+        d_den_p = np.polyder(den_p)
+        terms_ft = []
+        pf_rows = []
+        for idx, p_val in enumerate(poles_s):
+            res_val = np.polyval(num_p, p_val) / np.polyval(d_den_p, p_val)
+            pf_rows.append({"Pole (s_i)": str(np.round(p_val, 4)), "Residue (K_i)": str(np.round(res_val, 4))})
+            if abs(p_val.imag) < 1e-6:
+                terms_ft.append(f"({res_val.real:.4f}) e^{{{p_val.real:.4f}t}}")
+            else:
+                terms_ft.append(f"({np.round(res_val, 3)}) e^{{({np.round(p_val, 3)})t}}")
+        st.dataframe(pd.DataFrame(pf_rows), use_container_width=True)
+        st.latex("f(t) = \\mathcal{L}^{-1}\\{F(s)\\} = " + " + ".join(terms_ft))
+
     ode_tab_df = pd.DataFrame([
-        {"Case": "ODE 1 (Underdamped)", "a (y'')": 1.0, "b (y')": 2.0, "c (y)": 10.0, "y(0)": 1.0, "y'(0)": 0.0},
-        {"Case": "ODE 2 (Overdamped)", "a (y'')": 1.0, "b (y')": 5.0, "c (y)": 6.0, "y(0)": 2.0, "y'(0)": -1.0},
-        {"Case": "ODE 3 (Critically Damped)", "a (y'')": 1.0, "b (y')": 4.0, "c (y)": 4.0, "y(0)": 1.0, "y'(0)": 2.0},
+        {"Case": "Custom ODE", "a (y'')": 1.0, "b (y')": 4.0, "c (y)": 13.0, "y(0)": 1.0, "y'(0)": 0.0},
     ])
     ed_ode_tab = st.data_editor(ode_tab_df, num_rows="dynamic", use_container_width=True, key="ode_tab_editor")
     if st.button("⚙️ Solve All ODE Rows in Table", type="primary"):
@@ -1435,115 +1594,204 @@ with TABS[3]:
 
     render_camera_ai_section(
         "tab4_math",
-        "المعادلات التفاضلية وتحويلات لابلاس وفورييه (ODEs, Laplace & Fourier)",
-        "حل المعادلات التفاضلية وتحويلات لابلاس وفورييه والتكاملات المتعددة خطوة بخطوة.",
-        lambda: ed_ode_tab.to_string(),
+        "المعادلات التفاضلية وتحويلات لابلاس وفورييه (Universal ODEs, Laplace & Calculus)",
+        "حل أي معادلة تفاضلية أو تكامل أو تحويل لابلاس وفورييه خطوة بخطوة.",
+        lambda: f"Laplace N={num_lap_str}, D={den_lap_str}",
     )
 
 
 with TABS[4]:
     st.markdown("""
     <div class='sec-header'>
-        <h3>⚙️ 5. جداول الميكانيكا، دائرة مور (مع تحميل SVG)، وأحمال الكمرات | Mechanics, Mohr's Circle & Beams</h3>
+        <h3>⚙️ 5. الحل العام للكمرات متعددة الأحمال ودائرة مور | Universal Multi-Load Beam SFD/BMD & Mohr's Circle</h3>
+        <p>أضف <b>أي عدد من الأحمال المركزية أو الموزعة أو العزوم</b> في أي موضع على الكمرة، وسيقوم البرنامج بحساب ردود الأفعال ورسم منحنيي القص والعزوم <b>SFD & BMD</b> لأي مسألة.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    stress_df = pd.DataFrame([
-        {"Element": "Point A", "σx (MPa)": 80.0, "σy (MPa)": -40.0, "τxy (MPa)": 35.0, "Angle θ (deg)": 30.0},
-        {"Element": "Point B", "σx (MPa)": 120.0, "σy (MPa)": 40.0, "τxy (MPa)": -30.0, "Angle θ (deg)": 45.0},
-    ])
-    ed_stress = st.data_editor(stress_df, num_rows="dynamic", use_container_width=True, key="stress_editor")
-    if st.button("⚙️ Compute Principal Stresses Table & Draw Mohr's Circle SVG", type="primary"):
-        s_out = []
-        for _, r in ed_stress.iterrows():
-            sx, sy, txy, th = float(r["σx (MPa)"]), float(r["σy (MPa)"]), float(r["τxy (MPa)"]), float(r["Angle θ (deg)"])
-            s_avg = 0.5 * (sx + sy)
-            rad_m = math.hypot(0.5 * (sx - sy), txy)
-            s_out.append({
-                "Element": r["Element"],
-                "σ_avg (MPa)": round(s_avg, 2),
-                "σ1 Max (MPa)": round(s_avg + rad_m, 2),
-                "σ2 Min (MPa)": round(s_avg - rad_m, 2),
-                "τ_max (MPa)": round(rad_m, 2),
-                "θp (deg)": round(0.5 * math.degrees(math.atan2(2 * txy, sx - sy)), 2),
-            })
-        st.dataframe(pd.DataFrame(s_out), use_container_width=True)
-        r0 = ed_stress.iloc[0]
-        sx, sy, txy = float(r0["σx (MPa)"]), float(r0["σy (MPa)"]), float(r0["τxy (MPa)"])
-        s_avg = 0.5 * (sx + sy)
-        R = math.hypot(0.5 * (sx - sy), txy)
-        scale_m = 110.0 / max(1.0, R + abs(s_avg))
-        cx_m, cy_m = 200 + s_avg * scale_m, 160
-        rad_px = R * scale_m
-        x1_p, y1_p = 200 + sx * scale_m, 160 + txy * scale_m
-        x2_p, y2_p = 200 + sy * scale_m, 160 - txy * scale_m
-        svg_mohr = (
-            f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 320' style='width:420px; height:auto; background:white; border:1px solid rgb(203,213,225); border-radius:8px;'>"
-            f"<line x1='20' y1='160' x2='400' y2='160' stroke='black' stroke-width='1.5'/>"
-            f"<line x1='200' y1='20' x2='200' y2='300' stroke='black' stroke-width='1.5'/>"
-            f"<circle cx='{cx_m}' cy='{cy_m}' r='{rad_px}' fill='rgba(59,130,246,0.12)' stroke='rgb(29,78,216)' stroke-width='2.5'/>"
-            f"<line x1='{x1_p}' y1='{y1_p}' x2='{x2_p}' y2='{y2_p}' stroke='rgb(220,38,38)' stroke-width='2' stroke-dasharray='5,3'/>"
-            f"<circle cx='{cx_m}' cy='{cy_m}' r='4' fill='black'/>"
-            f"<text x='210' y='18' font-size='11' font-weight='bold' text-anchor='middle'>Mohr Circle (σ1={s_avg+R:.1f}, σ2={s_avg-R:.1f}, τmax={R:.1f})</text>"
-            f"</svg>"
-        )
-        st.markdown(svg_mohr, unsafe_allow_html=True)
-        st.download_button("📥 Download Mohr's Circle (.svg)", svg_mohr.encode("utf-8"), "Mohrs_Circle.svg", "image/svg+xml")
+    mech_choice = st.radio("⚙️ اختر الأداة:", ["1. Universal Multi-Load Beam Solver (SFD & BMD)", "2. Universal Stress Transformation & Mohr's Circle"], horizontal=True)
+
+    if mech_choice.startswith("1."):
+        b_c1, b_c2, b_c3 = st.columns(3)
+        with b_c1:
+            beam_L = st.number_input("📏 طول الكمرة الكلي L (m):", value=8.0, min_value=0.5)
+        with b_c2:
+            supp_A_x = st.number_input("📍 موضع الركيزة الأولى x_A (m):", value=0.0, min_value=0.0)
+        with b_c3:
+            supp_B_x = st.number_input("📍 موضع الركيزة الثانية x_B (m):", value=8.0, min_value=0.1)
+
+        init_loads_df = pd.DataFrame([
+            {"Load Type (Point / UDL / Moment)": "Point", "Magnitude (kN or kN/m or kN.m)": 20.0, "Start Position x1 (m)": 2.0, "End Position x2 (m for UDL)": 2.0},
+            {"Load Type (Point / UDL / Moment)": "UDL", "Magnitude (kN or kN/m or kN.m)": 10.0, "Start Position x1 (m)": 2.0, "End Position x2 (m for UDL)": 6.0},
+            {"Load Type (Point / UDL / Moment)": "Point", "Magnitude (kN or kN/m or kN.m)": 15.0, "Start Position x1 (m)": 6.0, "End Position x2 (m for UDL)": 6.0},
+        ])
+        ed_loads = st.data_editor(init_loads_df, num_rows="dynamic", use_container_width=True, key="beam_loads_editor")
+
+        if st.button("⚙️ Solve Beam Reactions & Plot SFD / BMD for All Loads", type="primary"):
+            tot_Fy = 0.0
+            sum_M_about_A = 0.0
+            for _, r in ed_loads.iterrows():
+                ltype = str(r["Load Type (Point / UDL / Moment)"]).strip().lower()
+                mag = float(r["Magnitude (kN or kN/m or kN.m)"])
+                x1 = float(r["Start Position x1 (m)"])
+                x2 = float(r["End Position x2 (m for UDL)"])
+                if "point" in ltype:
+                    tot_Fy += mag
+                    sum_M_about_A += mag * (x1 - supp_A_x)
+                elif "udl" in ltype:
+                    span_w = max(0.0, x2 - x1)
+                    f_eq = mag * span_w
+                    x_cent = x1 + 0.5 * span_w
+                    tot_Fy += f_eq
+                    sum_M_about_A += f_eq * (x_cent - supp_A_x)
+                elif "moment" in ltype:
+                    sum_M_about_A += mag
+
+            span_AB = supp_B_x - supp_A_x if abs(supp_B_x - supp_A_x) > 1e-6 else 1.0
+            R_B = sum_M_about_A / span_AB
+            R_A = tot_Fy - R_B
+            st.success(f"⚖️ **Support Reactions:** $R_A = {R_A:.3f}\\,\\text{{kN}}$ (at $x={supp_A_x}\\,\\text{{m}}$) | $R_B = {R_B:.3f}\\,\\text{{kN}}$ (at $x={supp_B_x}\\,\\text{{m}}$)")
+
+            x_grid = np.linspace(0.0, beam_L, 400)
+            V_arr = np.zeros_like(x_grid)
+            M_arr = np.zeros_like(x_grid)
+            for idx, xv in enumerate(x_grid):
+                v_val, m_val = 0.0, 0.0
+                if xv >= supp_A_x:
+                    v_val += R_A
+                    m_val += R_A * (xv - supp_A_x)
+                if xv >= supp_B_x:
+                    v_val += R_B
+                    m_val += R_B * (xv - supp_B_x)
+                for _, r in ed_loads.iterrows():
+                    ltype = str(r["Load Type (Point / UDL / Moment)"]).strip().lower()
+                    mag = float(r["Magnitude (kN or kN/m or kN.m)"])
+                    x1 = float(r["Start Position x1 (m)"])
+                    x2 = float(r["End Position x2 (m for UDL)"])
+                    if "point" in ltype and xv >= x1:
+                        v_val -= mag
+                        m_val -= mag * (xv - x1)
+                    elif "udl" in ltype and xv > x1:
+                        eff_end = min(xv, x2)
+                        length_active = max(0.0, eff_end - x1)
+                        f_act = mag * length_active
+                        v_val -= f_act
+                        m_val -= f_act * (xv - (x1 + 0.5 * length_active))
+                    elif "moment" in ltype and xv >= x1:
+                        m_val -= mag
+                V_arr[idx] = v_val
+                M_arr[idx] = m_val
+
+            st.info(f"📊 **Max Shear $|V|_{{max}} =$** `{np.max(np.abs(V_arr)):.3f} kN` | **Max Bending Moment $|M|_{{max}} =$** `{np.max(np.abs(M_arr)):.3f} kN·m`")
+            df_sfd_bmd = pd.DataFrame({"x (m)": np.round(x_grid, 3), "Shear V (kN)": V_arr, "Moment M (kN.m)": M_arr}).set_index("x (m)")
+            st.line_chart(df_sfd_bmd)
+
+    else:
+        stress_df = pd.DataFrame([
+            {"Element": "Custom Point", "σx (MPa)": 80.0, "σy (MPa)": -40.0, "τxy (MPa)": 35.0, "Angle θ (deg)": 30.0},
+        ])
+        ed_stress = st.data_editor(stress_df, num_rows="dynamic", use_container_width=True, key="stress_editor")
+        if st.button("⚙️ Compute Principal Stresses & Draw Mohr's Circle", type="primary"):
+            s_out = []
+            for _, r in ed_stress.iterrows():
+                sx, sy, txy, th = float(r["σx (MPa)"]), float(r["σy (MPa)"]), float(r["τxy (MPa)"]), float(r["Angle θ (deg)"])
+                s_avg = 0.5 * (sx + sy)
+                rad_m = math.hypot(0.5 * (sx - sy), txy)
+                rad_2th = math.radians(2.0 * th)
+                sx_p = s_avg + 0.5 * (sx - sy) * math.cos(rad_2th) + txy * math.sin(rad_2th)
+                txy_p = -0.5 * (sx - sy) * math.sin(rad_2th) + txy * math.cos(rad_2th)
+                s_out.append({
+                    "Element": r["Element"], "σ_avg": round(s_avg, 2),
+                    "σ1 Max": round(s_avg + rad_m, 2), "σ2 Min": round(s_avg - rad_m, 2),
+                    "τ_max": round(rad_m, 2), "θp (deg)": round(0.5 * math.degrees(math.atan2(2 * txy, sx - sy)), 2),
+                    "σx' at θ": round(sx_p, 2), "τx'y' at θ": round(txy_p, 2),
+                })
+            st.dataframe(pd.DataFrame(s_out), use_container_width=True)
 
     render_camera_ai_section(
         "tab5_mech",
-        "الميكانيكا التطبيقية ومقاومة المواد (Mohr's Circle, Beams SFD/BMD & Trusses)",
-        "حل مسائل الكمرات (SFD & BMD)، الجمالونات (Trusses)، ودائرة مور للإجهادات.",
-        lambda: ed_stress.to_string(),
+        "الميكانيكا التطبيقية ومقاومة المواد (Universal Beams, Trusses & Mohr's Circle)",
+        "حل أي مسألة كمرات (SFD & BMD) أو جمالونات (Trusses) أو دائرة مور للإجهادات.",
+        lambda: mech_choice,
     )
 
 
 with TABS[5]:
     st.markdown("""
     <div class='sec-header'>
-        <h3>⚡ 6. جدول اختبارات المحولات والدوائر الكهربية | Transformers & AC Circuits Table</h3>
+        <h3>⚡ 6. الحل العام للدوائر الكهربية (AC/DC Mesh & Nodal) والمحولات | Universal Circuits & Transformers</h3>
+        <p>حل <b>أي نظام معادلات عقد أو مسارات ($N \times N$ AC/DC Phasor Circuit)</b> بالممانعات المركبة $R+jX$، أو حسابات المحولات والكفاءة وتنظيم الجهد عند أي حمل.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    tr_df = pd.DataFrame([
-        {"Transformer": "Unit 1", "Voc (V)": 220.0, "Ioc (A)": 1.5, "Poc (W)": 120.0, "Vsc (V)": 45.0, "Isc (A)": 10.0, "Psc (W)": 250.0},
-    ])
-    ed_tr = st.data_editor(tr_df, num_rows="dynamic", use_container_width=True, key="tr_table_editor")
-    if st.button("⚙️ Compute Equivalent Circuit Parameters Table", type="primary"):
-        tr_out = []
-        for _, r in ed_tr.iterrows():
-            voc, ioc, poc = float(r["Voc (V)"]), float(r["Ioc (A)"]), float(r["Poc (W)"])
-            vsc, isc, psc = float(r["Vsc (V)"]), float(r["Isc (A)"]), float(r["Psc (W)"])
-            pf0 = poc / (voc * ioc)
-            rc = voc / (ioc * pf0)
-            xm = voc / (ioc * math.sqrt(max(0.0, 1.0 - pf0 ** 2)))
-            req = psc / (isc ** 2)
-            zeq = vsc / isc
-            xeq = math.sqrt(max(0.0, zeq ** 2 - req ** 2))
-            tr_out.append({"Transformer": r["Transformer"], "PF0": round(pf0, 4), "Rc (Ω)": round(rc, 2), "Xm (Ω)": round(xm, 2), "Req (Ω)": round(req, 3), "Xeq (Ω)": round(xeq, 3), "Zeq (Ω)": round(zeq, 3)})
-        st.dataframe(pd.DataFrame(tr_out), use_container_width=True)
+    el_mode = st.radio("⚡ اختر القسم الكهربي:", ["1. Universal AC/DC Mesh & Nodal Phasor Solver [Z][I] = [V]", "2. Transformer Equivalent Circuit, Efficiency & Voltage Regulation"], horizontal=True)
+
+    if el_mode.startswith("1."):
+        st.caption("📌 أدخل الممانعات المركبة بصيغة بايثون مثل `10+5j` أو `8-4j` أو أرقام حقيقية لدوائر التيار المستمر:")
+        ac_init = pd.DataFrame([
+            {"Z_col1": "10+5j", "Z_col2": "-5j", "Source V": "100+0j"},
+            {"Z_col1": "-5j", "Z_col2": "20+10j", "Source V": "0+0j"},
+        ])
+        ed_ac = st.data_editor(ac_init, num_rows="dynamic", use_container_width=True, key="ac_mesh_editor")
+        if st.button("⚙️ Solve AC/DC Currents / Node Voltages (Magnitude & Phase Angle)", type="primary"):
+            n_eq = len(ed_ac)
+            Z_mat = np.zeros((n_eq, n_eq), dtype=complex)
+            V_vec = np.zeros(n_eq, dtype=complex)
+            for i in range(n_eq):
+                for j in range(n_eq):
+                    Z_mat[i, j] = complex(str(ed_ac.iloc[i, j]).replace(" ", ""))
+                V_vec[i] = complex(str(ed_ac.iloc[i, -1]).replace(" ", ""))
+            I_sol = np.linalg.solve(Z_mat, V_vec)
+            phasor_rows = []
+            for idx, val_c in enumerate(I_sol, 1):
+                mag_v = abs(val_c)
+                ang_v = math.degrees(cmath.phase(val_c))
+                phasor_rows.append({"Variable": f"I_{idx} / V_{idx}", "Rectangular (Real + j Imag)": f"{val_c.real:.4f} + {val_c.imag:.4f}j", "Magnitude": round(mag_v, 4), "Phase Angle (deg)": round(ang_v, 2)})
+            st.dataframe(pd.DataFrame(phasor_rows), use_container_width=True)
+
+    else:
+        tr_df = pd.DataFrame([
+            {"Transformer": "Custom Unit", "Voc (V)": 220.0, "Ioc (A)": 1.5, "Poc (W)": 120.0, "Vsc (V)": 45.0, "Isc (A)": 10.0, "Psc (W)": 250.0, "Load PF": 0.85},
+        ])
+        ed_tr = st.data_editor(tr_df, num_rows="dynamic", use_container_width=True, key="tr_table_editor")
+        if st.button("⚙️ Compute Equivalent Circuit, Efficiency & Voltage Regulation", type="primary"):
+            tr_out = []
+            for _, r in ed_tr.iterrows():
+                voc, ioc, poc = float(r["Voc (V)"]), float(r["Ioc (A)"]), float(r["Poc (W)"])
+                vsc, isc, psc = float(r["Vsc (V)"]), float(r["Isc (A)"]), float(r["Psc (W)"])
+                pf_load = float(r.get("Load PF", 0.85))
+                pf0 = poc / (voc * ioc)
+                rc = voc / (ioc * pf0)
+                xm = voc / (ioc * math.sqrt(max(0.0, 1.0 - pf0 ** 2)))
+                req = psc / (isc ** 2)
+                zeq = vsc / isc
+                xeq = math.sqrt(max(0.0, zeq ** 2 - req ** 2))
+                sin_load = math.sqrt(max(0.0, 1.0 - pf_load ** 2))
+                v_reg_pct = ((isc * (req * pf_load + xeq * sin_load)) / voc) * 100.0
+                p_out = voc * isc * pf_load
+                eff_pct = (p_out / (p_out + poc + psc)) * 100.0
+                tr_out.append({"Unit": r["Transformer"], "Rc (Ω)": round(rc, 2), "Xm (Ω)": round(xm, 2), "Req (Ω)": round(req, 3), "Xeq (Ω)": round(xeq, 3), "V.Reg (%)": round(v_reg_pct, 2), "Efficiency (%)": round(eff_pct, 2)})
+            st.dataframe(pd.DataFrame(tr_out), use_container_width=True)
 
     render_camera_ai_section(
         "tab6_elec",
-        "الدوائر الكهربية والمحولات والقوى ثلاثية الأوجه (Electrical Engineering)",
-        "حل مسائل الدوائر الكهربية والمحولات والقدرة ثلاثية الأوجه.",
-        lambda: ed_tr.to_string(),
+        "الدوائر الكهربية والمحولات والقوى ثلاثية الأوجه (Universal Electrical Solver)",
+        "حل أي مسألة دوائر كهربية أو محولات أو قوى ثلاثية الأوجه.",
+        lambda: el_mode,
     )
 
 
 with TABS[6]:
     st.markdown("""
     <div class='sec-header'>
-        <h3>🎛️ 7. هندسة التحكم الآلي ومولد جدول راوث للاستقرار | Control Systems & Routh-Hurwitz Array Generator</h3>
-        <p>بناء جدول راوث للاستقرار (<b>Routh-Hurwitz Stability Table</b>) تلقائياً مع معالجة الحالات الخاصة وحساب عدد الأقطاب في النصف الأيمن (RHP)، بالإضافة إلى جدول خصائص الاستجابة الزمنية.</p>
+        <h3>🎛️ 7. الحل العام لهندسة التحكم وجدول راوث | Universal Control Systems & Routh-Hurwitz</h3>
     </div>
     """, unsafe_allow_html=True)
 
     routh_coeffs_str = st.text_input(
-        "🔢 Characteristic Polynomial Coefficients (a_n s^n + ... + a_0 = 0, separated by comma):",
+        "🔢 أدخل معاملات معادلة المقام لأي نظام تحكم (a_n s^n + ... + a_0 = 0):",
         value="1, 2, 3, 6, 5, 3",
     )
-    if st.button("⚙️ Generate Full Routh-Hurwitz Stability Table & Pole Count", type="primary"):
+    if st.button("⚙️ Generate Full Routh-Hurwitz Stability Table & Roots", type="primary"):
         coeffs = [float(x.strip()) for x in routh_coeffs_str.split(",") if x.strip()]
         deg_n = len(coeffs) - 1
         cols_cnt = (len(coeffs) + 1) // 2
@@ -1561,32 +1809,27 @@ with TABS[6]:
             if abs(routh[i - 1, 0]) < 1e-9:
                 routh[i - 1, 0] = 1e-5
             for j in range(cols_cnt - 1):
-                a1 = routh[i - 2, 0]
-                b1 = routh[i - 1, 0]
-                a2 = routh[i - 2, j + 1]
-                b2 = routh[i - 1, j + 1]
+                a1, b1 = routh[i - 2, 0], routh[i - 1, 0]
+                a2, b2 = routh[i - 2, j + 1], routh[i - 1, j + 1]
                 routh[i, j] = (b1 * a2 - a1 * b2) / b1
 
         row_labels = [f"s^{deg_n - i}" for i in range(deg_n + 1)]
         col_labels = [f"Col {j+1}" for j in range(cols_cnt)]
-        df_routh = pd.DataFrame(np.round(routh, 5), index=row_labels, columns=col_labels)
-        st.markdown("<h4>📋 جدول راوث للاستقرار | Routh-Hurwitz Array:</h4>", unsafe_allow_html=True)
-        st.dataframe(df_routh, use_container_width=True)
+        st.dataframe(pd.DataFrame(np.round(routh, 5), index=row_labels, columns=col_labels), use_container_width=True)
 
         first_col = routh[:, 0]
         sign_changes = sum(1 for k in range(len(first_col) - 1) if first_col[k] * first_col[k + 1] < 0)
         exact_roots = np.roots(coeffs)
         if sign_changes == 0:
-            st.success(f"✅ **System is Stable!** (0 sign changes in Column 1) | Roots: `{np.round(exact_roots, 4)}`")
+            st.success(f"✅ **System is Stable!** (0 sign changes) | Roots: `{np.round(exact_roots, 4)}`")
         else:
-            st.error(f"⚠️ **System is Unstable!** (`{sign_changes}` sign changes in Column 1 ➔ `{sign_changes}` poles in Right-Half Plane RHP) | Roots: `{np.round(exact_roots, 4)}`")
+            st.error(f"⚠️ **System is Unstable!** (`{sign_changes}` Right-Half Plane poles) | Roots: `{np.round(exact_roots, 4)}`")
 
     ctrl_df = pd.DataFrame([
-        {"System": "Sys 1", "wn (rad/s)": 5.0, "Damping Ratio (ζ)": 0.4, "DC Gain (K)": 1.0},
-        {"System": "Sys 2", "wn (rad/s)": 8.0, "Damping Ratio (ζ)": 0.707, "DC Gain (K)": 2.0},
+        {"System": "Custom Sys", "wn (rad/s)": 6.0, "Damping Ratio (ζ)": 0.5, "DC Gain (K)": 1.0},
     ])
     ed_ctrl = st.data_editor(ctrl_df, num_rows="dynamic", use_container_width=True, key="ctrl_table_editor")
-    if st.button("⚙️ Compute Transient Specifications Table (Mp%, Tp, Ts)", type="primary"):
+    if st.button("⚙️ Compute Transient Specifications (Mp%, Tp, Ts, Tr)", type="primary"):
         c_out = []
         for _, r in ed_ctrl.iterrows():
             wn, z = float(r["wn (rad/s)"]), float(r["Damping Ratio (ζ)"])
@@ -1599,8 +1842,8 @@ with TABS[6]:
 
     render_camera_ai_section(
         "tab7_ctrl",
-        "هندسة التحكم الآلي والـ PLC (Control Systems & Routh-Hurwitz)",
-        "حل مسائل Routh-Hurwitz, Root Locus, Bode, Block Diagrams, PID, و PLC Ladder Logic.",
+        "هندسة التحكم الآلي والـ PLC (Universal Control Systems)",
+        "حل أي مسألة تحكم آلي Routh-Hurwitz, Root Locus, Bode, Block Diagrams, PID, و PLC.",
         lambda: f"Routh Polynomial: {routh_coeffs_str}",
     )
 
